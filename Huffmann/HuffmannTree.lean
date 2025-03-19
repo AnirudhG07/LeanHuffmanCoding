@@ -70,18 +70,41 @@ structure Alphabet where
   freq : Nat
 
 def convert_input_to_alphabet (input : List (Char × Nat)) : List Alphabet := input.map fun a => Alphabet.mk a.1 a.2
--- Encode a string in a Huffman tree
-def huffman (huffinput : List (Char × Nat)) : List (Char × String) :=
+
+-- Returns the Binary Tree of the Huffman encoding
+def HfmnTree.tree (huffinput : List (Char × Nat)) : HfmnTree :=
   let input := convert_input_to_alphabet huffinput
   let leaves : List HfmnTree := input.map (fun a => HfmnTree.Leaf a.char a.freq)
   let tree : HfmnTree := HfmnTree.merge leaves |>.head!
+  tree
+
+-- #eval HfmnTree.tree [('a', 45),('b', 13),('c', 12),('d', 16),('e', 9),('f', 5)]
+
+-- Returns the depth of a character in the Huffman tree, if not found returns -1
+def HfmnTree.depth (tree: HfmnTree) (c: Char) : Int :=
+  -- Helper function to calculate the depth of a character in the tree
+  let rec depthAux (tree: HfmnTree) (c: Char) (d: Int) : Int :=
+    match tree with
+    | HfmnTree.Leaf c' _ => if c = c' then d else -1
+    | HfmnTree.node l r _ =>
+      let leftDepth := depthAux l c (d + 1)
+      if leftDepth != -1 then leftDepth else depthAux r c (d + 1)
+  depthAux tree c 0
+
+-- #eval HfmnTree.depth (HfmnTree.tree [('a', 45),('b', 13),('c', 12),('d', 16),('e', 9),('f', 5)] ) 'a' -- 1
+
+-- Encode a string in a Huffman tree
+def huffman (huffinput : List (Char × Nat)) : List (Char × String) :=
+  let tree := HfmnTree.tree huffinput
+  let input := convert_input_to_alphabet huffinput
   input.map (fun a => (a.char, tree.encode a.char |>.get!))
+
+-- #eval huffman [('a', 45),('b', 13),('c', 12),('d', 16),('e', 9),('f', 5)] = [('a', "0"),('b', "101"),('c', "100"),('d', "111"),('e', "1101"),('f', "1100")]
+-- #eval huffman [('B', 7),('C', 6),('A', 3),('D', 1),('E', 1),] = [('B', "0"), ('C', "11"), ('A', "101"), ('D', "1001"), ('E', "1000")]
 
 def Huffmann.least_encoded_data (huffinput : List (Char × Nat)) : Nat :=
   let encoded := huffman huffinput
   huffinput.foldl (fun acc a => acc + (encoded.find? (·.1 = a.1) |>.get!.2).length * a.2) 0
- 
 
--- #eval huffman [('a', 45),('b', 13),('c', 12),('d', 16),('e', 9),('f', 5)] = [('a', "0"),('b', "101"),('c', "100"),('d', "111"),('e', "1101"),('f', "1100")]
--- #eval huffman [('B', 7),('C', 6),('A', 3),('D', 1),('E', 1),] = [('B', "0"), ('C', "11"), ('A', "101"), ('D', "1001"), ('E', "1000")]
 -- #eval Huffmann.least_encoded_data [('a', 45),('b', 13),('c', 12),('d', 16),('e', 9),('f', 5)] -- 224
+
