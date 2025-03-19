@@ -4,7 +4,7 @@ We will initially define the binary treee for encoding and get the minimum encod
 -/
 
 abbrev AlphaNumList := List (Char × Nat)
-abbrev EncodedCharList := List (Char × String)
+abbrev CharEncodedList := List (Char × String)
 
 def eg₁ : AlphaNumList := [('a', 45),('b', 13),('c', 12),('d', 16),('e', 9),('f', 5)]
 
@@ -101,7 +101,7 @@ def HfmnTree.depth (tree: HfmnTree) (c: Char) : Int :=
 -- #eval HfmnTree.depth (HfmnTree.tree eg₁ ) 'a' -- 1
 
 -- Encode a string in a Huffman tree
-def HfmnTree.encoded_tree (huffinput : AlphaNumList) : EncodedCharList :=
+def HfmnTree.encoded_tree (huffinput : AlphaNumList) : CharEncodedList :=
   let tree := HfmnTree.tree huffinput
   let input := convert_input_to_alphabet huffinput
   input.map (fun a => (a.char, tree.encode a.char |>.get!))
@@ -119,10 +119,17 @@ def Huffmann.least_encoded_data (huffinput : AlphaNumList) : Nat :=
 def checkPrefixfree (w₁ w₂: String) : Bool :=
   if w₁.startsWith w₂ || w₂.startsWith w₁ then false else true
 
-def HfmnTree.isPrefixfree : EncodedCharList → Bool
+-- Check if the encoded list is prefix free, i.e. compares each encoded string with all other strings
+def isPrefixfree : CharEncodedList → Bool
   | [] => true
   | (_, s) :: rest => rest.all (fun a => checkPrefixfree s a.2) && isPrefixfree rest
 
 -- #eval HfmnTree.isPrefixfree ( HfmnTree.encoded_tree eg₁ ) -- true
 -- #eval HfmnTree.isPrefixfree ( [('a', "0"),('b', "101"),('c', "100"),('d', "011"),('e', "1101"),('f', "1100")] ) -- false
 
+def HfmnTree.decode (encoded_str: String) (enc_huffinput: CharEncodedList) : Option Char :=
+  -- Iterate through the list and find the matching encoded string
+  enc_huffinput.find? (λ (_, s) => s = encoded_str) |>.map (·.1)
+
+-- #eval HfmnTree.decode "1" ( HfmnTree.encoded_tree eg₁ ) -- none
+-- #eval HfmnTree.decode "0" ( HfmnTree.encoded_tree eg₁ ) -- some 'a'
