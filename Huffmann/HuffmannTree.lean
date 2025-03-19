@@ -3,6 +3,11 @@
 We will initially define the binary treee for encoding and get the minimum encoded data for the list of input data.
 -/
 
+abbrev AlphaNumList := List (Char × Nat)
+abbrev EncodedCharList := List (Char × String)
+
+def eg₁ : AlphaNumList := [('a', 45),('b', 13),('c', 12),('d', 16),('e', 9),('f', 5)]
+
 /-- Huffman Tree -/
 inductive HfmnTree where
   | node (left : HfmnTree) (right : HfmnTree) (weight : Nat)
@@ -69,16 +74,18 @@ structure Alphabet where
   char : Char
   freq : Nat
 
-def convert_input_to_alphabet (input : List (Char × Nat)) : List Alphabet := input.map fun a => Alphabet.mk a.1 a.2
+abbrev AlphaNumTree := List Alphabet
+
+def convert_input_to_alphabet (input : AlphaNumList) : AlphaNumTree := input.map fun a => Alphabet.mk a.1 a.2
 
 -- Returns the Binary Tree of the Huffman encoding
-def HfmnTree.tree (huffinput : List (Char × Nat)) : HfmnTree :=
+def HfmnTree.tree (huffinput : AlphaNumList) : HfmnTree :=
   let input := convert_input_to_alphabet huffinput
   let leaves : List HfmnTree := input.map (fun a => HfmnTree.Leaf a.char a.freq)
   let tree : HfmnTree := HfmnTree.merge leaves |>.head!
   tree
 
--- #eval HfmnTree.tree [('a', 45),('b', 13),('c', 12),('d', 16),('e', 9),('f', 5)]
+-- #eval HfmnTree.tree eg₁
 
 -- Returns the depth of a character in the Huffman tree, if not found returns -1
 def HfmnTree.depth (tree: HfmnTree) (c: Char) : Int :=
@@ -91,20 +98,31 @@ def HfmnTree.depth (tree: HfmnTree) (c: Char) : Int :=
       if leftDepth != -1 then leftDepth else depthAux r c (d + 1)
   depthAux tree c 0
 
--- #eval HfmnTree.depth (HfmnTree.tree [('a', 45),('b', 13),('c', 12),('d', 16),('e', 9),('f', 5)] ) 'a' -- 1
+-- #eval HfmnTree.depth (HfmnTree.tree eg₁ ) 'a' -- 1
 
 -- Encode a string in a Huffman tree
-def huffman (huffinput : List (Char × Nat)) : List (Char × String) :=
+def HfmnTree.encoded_tree (huffinput : AlphaNumList) : EncodedCharList :=
   let tree := HfmnTree.tree huffinput
   let input := convert_input_to_alphabet huffinput
   input.map (fun a => (a.char, tree.encode a.char |>.get!))
 
--- #eval huffman [('a', 45),('b', 13),('c', 12),('d', 16),('e', 9),('f', 5)] = [('a', "0"),('b', "101"),('c', "100"),('d', "111"),('e', "1101"),('f', "1100")]
--- #eval huffman [('B', 7),('C', 6),('A', 3),('D', 1),('E', 1),] = [('B', "0"), ('C', "11"), ('A', "101"), ('D', "1001"), ('E', "1000")]
+-- #eval HfmnTree.encoded_tree eg₁ = [('a', "0"),('b', "101"),('c', "100"),('d', "111"),('e', "1101"),('f', "1100")]
+-- #eval HfmnTree.encoded_tree [('B', 7),('C', 6),('A', 3),('D', 1),('E', 1),] = [('B', "0"), ('C', "11"), ('A', "101"), ('D', "1001"), ('E', "1000")]
 
-def Huffmann.least_encoded_data (huffinput : List (Char × Nat)) : Nat :=
-  let encoded := huffman huffinput
+def Huffmann.least_encoded_data (huffinput : AlphaNumList) : Nat :=
+  let encoded := HfmnTree.encoded_tree huffinput
   huffinput.foldl (fun acc a => acc + (encoded.find? (·.1 = a.1) |>.get!.2).length * a.2) 0
 
--- #eval Huffmann.least_encoded_data [('a', 45),('b', 13),('c', 12),('d', 16),('e', 9),('f', 5)] -- 224
+-- #eval Huffmann.least_encoded_data eg₁ -- 224
+
+-- check if 2 strings are prefix free of each other
+def checkPrefixfree (w₁ w₂: String) : Bool :=
+  if w₁.startsWith w₂ || w₂.startsWith w₁ then false else true
+
+def HfmnTree.isPrefixfree : EncodedCharList → Bool
+  | [] => true
+  | (_, s) :: rest => rest.all (fun a => checkPrefixfree s a.2) && isPrefixfree rest
+
+-- #eval HfmnTree.isPrefixfree ( HfmnTree.encoded_tree eg₁ ) -- true
+-- #eval HfmnTree.isPrefixfree ( [('a', "0"),('b', "101"),('c', "100"),('d', "011"),('e', "1101"),('f', "1100")] ) -- false
 
