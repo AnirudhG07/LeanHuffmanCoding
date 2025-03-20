@@ -11,18 +11,16 @@ def eg₁ : AlphaNumList := [('a', 45),('b', 13),('c', 12),('d', 16),('e', 9),('
 /-- Huffman Tree -/
 inductive HfmnTree where
   | node (left : HfmnTree) (right : HfmnTree) (weight : Nat)
-  | Leaf (c : Char) (weight : Nat)
+  | Leaf (c : Char) (weight : Nat) (code : String := "")
 deriving Inhabited, Repr
 
 def HfmnTree.weight : HfmnTree → Nat
-  | Leaf _ w => w
+  | Leaf _ w _ => w
   | node _ _ w => w
 
 -- Comparison function for Huffman trees weights
 def HfmnTree.compare (s s' : HfmnTree) : Ordering :=
-  let w := s.weight
-  let w' := s'.weight
-  Ord.compare w w'
+  Ord.compare s.weight s'.weight
 
 instance : Ord HfmnTree where
   compare := HfmnTree.compare
@@ -41,7 +39,7 @@ def insertionSort {α : Type} [Ord α] : List α → List α
   | [] => []
   | b :: l => orderedInsert b (insertionSort l)
 
-#check insertionSort
+-- #check insertionSort
 
 def HfmnTree.sort (trees : List HfmnTree) : List HfmnTree := insertionSort trees
 
@@ -63,7 +61,7 @@ partial def HfmnTree.merge (trees : List HfmnTree) : List HfmnTree :=
 
 -- Encode a character in a Huffman tree
 def HfmnTree.encode (c : Char) : HfmnTree → Option String
-  | .Leaf c' _ => if c = c' then some "" else none
+  | .Leaf c' _ _ => if c = c' then some "" else none
   | .node l r _w =>
     match l.encode c, r.encode c with
     | none, some s => some ("1" ++ s)
@@ -87,19 +85,6 @@ def HfmnTree.tree (huffinput : AlphaNumList) : HfmnTree :=
 
 -- #eval HfmnTree.tree eg₁
 
--- Returns the depth of a character in the Huffman tree, if not found returns -1
-def HfmnTree.depth (tree: HfmnTree) (c: Char) : Int :=
-  -- Helper function to calculate the depth of a character in the tree
-  let rec depthAux (tree: HfmnTree) (c: Char) (d: Int) : Int :=
-    match tree with
-    | HfmnTree.Leaf c' _ => if c = c' then d else -1
-    | HfmnTree.node l r _ =>
-      let leftDepth := depthAux l c (d + 1)
-      if leftDepth != -1 then leftDepth else depthAux r c (d + 1)
-  depthAux tree c 0
-
--- #eval HfmnTree.depth (HfmnTree.tree eg₁ ) 'a' -- 1
-
 -- Encode a string in a Huffman tree
 def HfmnTree.encoded_tree (huffinput : AlphaNumList) : CharEncodedList :=
   let tree := HfmnTree.tree huffinput
@@ -114,6 +99,19 @@ def Huffmann.least_encoded_data (huffinput : AlphaNumList) : Nat :=
   huffinput.foldl (fun acc a => acc + (encoded.find? (·.1 = a.1) |>.get!.2).length * a.2) 0
 
 -- #eval Huffmann.least_encoded_data eg₁ -- 224
+
+-- Returns the depth of a character in the Huffman tree, if not found returns -1
+def HfmnTree.depth (tree: HfmnTree) (c: Char) : Int :=
+  -- Helper function to calculate the depth of a character in the tree
+  let rec depthAux (tree: HfmnTree) (c: Char) (d: Int) : Int :=
+    match tree with
+    | HfmnTree.Leaf c' _ _ => if c = c' then d else -1
+    | HfmnTree.node l r _ =>
+      let leftDepth := depthAux l c (d + 1)
+      if leftDepth != -1 then leftDepth else depthAux r c (d + 1)
+  depthAux tree c 0
+
+-- #eval HfmnTree.depth (HfmnTree.tree eg₁ ) 'a' -- 1
 
 -- check if 2 strings are prefix free of each other
 def checkPrefixfree (w₁ w₂: String) : Bool :=
