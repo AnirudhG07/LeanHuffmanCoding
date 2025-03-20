@@ -76,7 +76,7 @@ abbrev AlphaNumTree := List Alphabet
 
 def convert_input_to_alphabet (input : AlphaNumList) : AlphaNumTree := input.map fun a => Alphabet.mk a.1 a.2
 
--- Returns the Binary Tree of the Huffman encoding
+-- Returns the Binary Tree of the Huffman encoding, without the encoded strings
 def HfmnTree.tree (huffinput : AlphaNumList) : HfmnTree :=
   let input := convert_input_to_alphabet huffinput
   let leaves : List HfmnTree := input.map (fun a => HfmnTree.Leaf a.char a.freq)
@@ -86,16 +86,24 @@ def HfmnTree.tree (huffinput : AlphaNumList) : HfmnTree :=
 -- #eval HfmnTree.tree eg₁
 
 -- Encode a string in a Huffman tree
-def HfmnTree.encoded_tree (huffinput : AlphaNumList) : CharEncodedList :=
+def HfmnTree.encoded_tree (huffinput : AlphaNumList) : (CharEncodedList × HfmnTree):=
   let tree := HfmnTree.tree huffinput
   let input := convert_input_to_alphabet huffinput
-  input.map (fun a => (a.char, tree.encode a.char |>.get!))
+  let enc_list := input.map (fun a => (a.char, tree.encode a.char |>.get!))
+  -- Add this to the tree
+  let rec addCode (tree : HfmnTree) (code : String) : HfmnTree :=
+    match tree with
+    | HfmnTree.Leaf c w _ => HfmnTree.Leaf c w code
+    | HfmnTree.node l r w => HfmnTree.node (addCode l (code ++ "0")) (addCode r (code ++ "1")) w
 
--- #eval HfmnTree.encoded_tree eg₁ = [('a', "0"),('b', "101"),('c', "100"),('d', "111"),('e', "1101"),('f', "1100")]
--- #eval HfmnTree.encoded_tree [('B', 7),('C', 6),('A', 3),('D', 1),('E', 1),] = [('B', "0"), ('C', "11"), ('A', "101"), ('D', "1001"), ('E', "1000")]
+  let tree' := addCode tree ""
+  (enc_list, tree')
+
+-- #eval (HfmnTree.encoded_tree eg₁).1 = [('a', "0"),('b', "101"),('c', "100"),('d', "111"),('e', "1101"),('f', "1100")]
+-- #eval (HfmnTree.encoded_tree [('B', 7),('C', 6),('A', 3),('D', 1),('E', 1),]).1 = [('B', "0"), ('C', "11"), ('A', "101"), ('D', "1001"), ('E', "1000")]
 
 def Huffmann.least_encoded_data (huffinput : AlphaNumList) : Nat :=
-  let encoded := HfmnTree.encoded_tree huffinput
+  let encoded := (HfmnTree.encoded_tree huffinput).1
   huffinput.foldl (fun acc a => acc + (encoded.find? (·.1 = a.1) |>.get!.2).length * a.2) 0
 
 -- #eval Huffmann.least_encoded_data eg₁ -- 224
