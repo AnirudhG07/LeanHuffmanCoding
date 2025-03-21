@@ -14,6 +14,23 @@ inductive HfmnTree where
   | Leaf (c : Char) (weight : Nat) (code : String := "")
 deriving Inhabited, Repr
 
+/-- Theorem: Strings inputs in a Huffman tree are only at the leaves -/
+theorem inputs_at_leaves (tree : HfmnTree) :
+  ∀ (c : Char), (∃ (w : Nat) (code : String), tree = HfmnTree.Leaf c w code) ↔ 
+  (∃ (leaf : HfmnTree), (∃ (w : Nat) (code : String), leaf = HfmnTree.Leaf c w code) ∧ tree = leaf) := by
+  intro c
+  constructor
+  -- Forward direction: If a character exists in the tree, it must be in a Leaf
+  · intro h
+    rcases h with ⟨w, code, h⟩
+    exists HfmnTree.Leaf c w code
+    simp [h]
+  -- Backward direction: If a Leaf exists with the character, then the character is in the tree
+  · intro h
+    rcases h with ⟨leaf, ⟨w, code, h_leaf⟩, h_tree⟩
+    exists w, code
+    rw [h_tree, h_leaf]
+
 def HfmnTree.weight : HfmnTree → Nat
   | Leaf _ w _ => w
   | node _ _ w => w
