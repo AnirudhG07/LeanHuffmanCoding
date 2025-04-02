@@ -77,17 +77,25 @@ partial def HfmnTree.merge (trees : List HfmnTree) : List HfmnTree :=
     HfmnTree.merge (t' :: rest)
 
 -- Encode a character in a Huffman tree
-def HfmnTree.encode (c : Char) : HfmnTree → Option String
-  | .Leaf c' _ _ => if c = c' then some "" else none
+def HfmnTree.encodeWithDepth (c : Char) : HfmnTree → Option (String × Nat)
+  | .Leaf c' _ _ => 
+    if c = c' then some ("", 0) else none
   | .node l r _w =>
-    match l.encode c, r.encode c with
-    | none, some s => some ("1" ++ s)
-    | some s, none => some ("0" ++ s)
+    match l.encodeWithDepth c, r.encodeWithDepth c with
+    | none, some (s, d) => some ("1" ++ s, d + 1)
+    | some (s, d), none => some ("0" ++ s, d + 1)
     | _, _ => none
+
+def HfmnTree.encode (c : Char) (t : HfmnTree) : Option String :=
+  (t.encodeWithDepth c).map (·.1)
+
+def HfmnTree.depth (c : Char) (t : HfmnTree) : Option Nat :=
+  (t.encodeWithDepth c).map (·.2)
 
 structure Alphabet where
   char : Char
   freq : Nat
+deriving Inhabited, Repr
 
 abbrev AlphaNumTree := List Alphabet
 
@@ -117,7 +125,7 @@ def HfmnTree.encoded_tree (huffinput : AlphaNumList) : (CharEncodedList × HfmnT
   (enc_list, tree')
 
 -- #eval (HfmnTree.encoded_tree eg₁).1 = [('a', "0"),('b', "101"),('c', "100"),('d', "111"),('e', "1101"),('f', "1100")]
--- #eval (HfmnTree.encoded_tree [('B', 7),('C', 6),('A', 3),('D', 1),('E', 1),]).1 = [('B', "0"), ('C', "11"), ('A', "101"), ('D', "1001"), ('E', "1000")]
+-- -- #eval (HfmnTree.encoded_tree [('B', 7),('C', 6),('A', 3),('D', 1),('E', 1),]).1 = [('B', "0"), ('C', "11"), ('A', "101"), ('D', "1001"), ('E', "1000")]
 
 def Huffmann.least_encoded_data (huffinput : AlphaNumList) : Nat :=
   let encoded := (HfmnTree.encoded_tree huffinput).1
@@ -126,7 +134,7 @@ def Huffmann.least_encoded_data (huffinput : AlphaNumList) : Nat :=
 -- #eval Huffmann.least_encoded_data eg₁ -- 224
 
 -- Returns the depth of a character in the Huffman tree, if not found returns -1
-def HfmnTree.depth (tree: HfmnTree) (c: Char) : Int :=
+def HfmnTree.manual_depth (tree: HfmnTree) (c: Char) : Int :=
   -- Helper function to calculate the depth of a character in the tree
   let rec depthAux (tree: HfmnTree) (c: Char) (d: Int) : Int :=
     match tree with
@@ -136,7 +144,7 @@ def HfmnTree.depth (tree: HfmnTree) (c: Char) : Int :=
       if leftDepth != -1 then leftDepth else depthAux r c (d + 1)
   depthAux tree c 0
 
--- #eval HfmnTree.depth (HfmnTree.tree eg₁ ) 'a' -- 1
+-- #eval HfmnTree.manual_depth (HfmnTree.tree eg₁ ) 'a' -- 1
 
 -- check if 2 strings are prefix free of each other
 def checkPrefixfree (w₁ w₂: String) : Bool :=
@@ -147,12 +155,12 @@ def isPrefixfree : CharEncodedList → Bool
   | [] => true
   | (_, s) :: rest => rest.all (fun a => checkPrefixfree s a.2) && isPrefixfree rest
 
--- #eval HfmnTree.isPrefixfree ( HfmnTree.encoded_tree eg₁ ) -- true
--- #eval HfmnTree.isPrefixfree ( [('a', "0"),('b', "101"),('c', "100"),('d', "011"),('e', "1101"),('f', "1100")] ) -- false
+-- #eval isPrefixfree (HfmnTree.encoded_tree eg₁).1 -- true
+-- #eval isPrefixfree ([('a', "0"),('b', "101"),('c', "100"),('d', "011"),('e', "1101"),('f', "1100")]).1 -- false
 
 def HfmnTree.decode (encoded_str: String) (enc_huffinput: CharEncodedList) : Option Char :=
   -- Iterate through the list and find the matching encoded string
   enc_huffinput.find? (λ (_, s) => s = encoded_str) |>.map (·.1)
 
--- #eval HfmnTree.decode "1" ( HfmnTree.encoded_tree eg₁ ) -- none
--- #eval HfmnTree.decode "0" ( HfmnTree.encoded_tree eg₁ ) -- some 'a'
+#eval HfmnTree.decode "1" ( HfmnTree.encoded_tree eg₁ ).1 -- none
+#eval HfmnTree.decode "0" ( HfmnTree.encoded_tree eg₁ ).1 -- some 'a'
