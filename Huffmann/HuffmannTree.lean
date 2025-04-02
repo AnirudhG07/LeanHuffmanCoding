@@ -8,13 +8,13 @@ abbrev CharEncodedList := List (Char × String)
 
 def eg₁ : AlphaNumList := [('a', 45),('b', 13),('c', 12),('d', 16),('e', 9),('f', 5)]
 
-/-- Huffman Tree -/
+-- Huffman Tree Definition
 inductive HfmnTree where
   | node (left : HfmnTree) (right : HfmnTree) (weight : Nat)
   | Leaf (c : Char) (weight : Nat) (code : String := "")
 deriving Inhabited, Repr
 
-/-- Theorem: Strings inputs in a Huffman tree are only at the leaves -/
+-- Theorem: Strings inputs in a Huffman tree are only at the leaves
 theorem inputs_at_leaves (tree : HfmnTree) :
   ∀ (c : Char), (∃ (w : Nat) (code : String), tree = HfmnTree.Leaf c w code) ↔ 
   (∃ (leaf : HfmnTree), (∃ (w : Nat) (code : String), leaf = HfmnTree.Leaf c w code) ∧ tree = leaf) := by
@@ -42,8 +42,7 @@ def HfmnTree.compare (s s' : HfmnTree) : Ordering :=
 instance : Ord HfmnTree where
   compare := HfmnTree.compare
 
-/-- Insert an element in a way that
-does not break the order of the sorted list. -/
+-- Insert an element in a way that does not break the order of the sorted list.
 def orderedInsert {α : Type} [Ord α] (a : α) : List α → List α
   | [] => [a]
   | b :: l =>
@@ -51,7 +50,7 @@ def orderedInsert {α : Type} [Ord α] (a : α) : List α → List α
     | .lt => a :: b :: l
     | _ => b :: orderedInsert a l
 
-/-- insertion sort -/
+-- insertion sort 
 def insertionSort {α : Type} [Ord α] : List α → List α
   | [] => []
   | b :: l => orderedInsert b (insertionSort l)
@@ -81,6 +80,7 @@ def HfmnTree.encodeWithDepth (c : Char) : HfmnTree → Option (String × Nat)
   | .Leaf c' _ _ => 
     if c = c' then some ("", 0) else none
   | .node l r _w =>
+    -- Has an underlying assumption, every digit increase in code, depth +=1 too.
     match l.encodeWithDepth c, r.encodeWithDepth c with
     | none, some (s, d) => some ("1" ++ s, d + 1)
     | some (s, d), none => some ("0" ++ s, d + 1)
@@ -162,5 +162,5 @@ def HfmnTree.decode (encoded_str: String) (enc_huffinput: CharEncodedList) : Opt
   -- Iterate through the list and find the matching encoded string
   enc_huffinput.find? (λ (_, s) => s = encoded_str) |>.map (·.1)
 
-#eval HfmnTree.decode "1" ( HfmnTree.encoded_tree eg₁ ).1 -- none
-#eval HfmnTree.decode "0" ( HfmnTree.encoded_tree eg₁ ).1 -- some 'a'
+-- #eval HfmnTree.decode "1" ( HfmnTree.encoded_tree eg₁ ).1 -- none
+-- #eval HfmnTree.decode "0" ( HfmnTree.encoded_tree eg₁ ).1 -- some 'a'
