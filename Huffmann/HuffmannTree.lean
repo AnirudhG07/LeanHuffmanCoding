@@ -165,18 +165,24 @@ def HfmnTree.manual_depth (tree: HfmnTree) (c: Char) : Int :=
 
 -- #eval HfmnTree.manual_depth (HfmnTree.tree eg₁ ) 'a' -- 1
 
+-- Valid path function, considers a path to the leaf as valid, path to Node as invalid
+def HfmnTree.valid_leaf_or_node (bl: BoolList) (tree: HfmnTree) : Bool :=
+  match tree with
+  | HfmnTree.Leaf _ _ _ => bl.isEmpty
+  | HfmnTree.node l r _ =>
+    match bl with
+    | [] => false
+    | b :: bs =>
+      if b then valid_leaf_or_node bs r
+      else valid_leaf_or_node bs l
+
+-- #eval HfmnTree.valid_path_of_tree [true, false, true] (HfmnTree.tree eg₁) -- true
+
 -- check if 2 BoolEncList are prefix free of each other
 def checkPrefixfree (bl₁ bl₂: BoolList) : Bool :=
-  let rec check (w₁ w₂: BoolList) : Bool :=
-    match w₁, w₂ with
-    | [], [] => false
-    | [], _ => false
-    | _, [] => false
-    | b₁ :: w₁', b₂ :: w₂' =>
-      if b₁ = b₂ then check w₁' w₂' else true
-  check bl₁ bl₂
+  bl₁ ≠ bl₂ ∧ ¬(bl₁.isPrefixOf bl₂ ∨ bl₂.isPrefixOf bl₁)
 
--- #eval checkPrefixfree [true, false] [true, false] -- false
+-- #eval checkPrefixfree [true, false, false] [true, false] -- false
 
 -- Check if the encoded list is prefix free, i.e. compares each encoded string with all other strings
 def isPrefixfree : BoolEncList → Bool
