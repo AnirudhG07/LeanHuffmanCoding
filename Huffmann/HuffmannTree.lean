@@ -86,17 +86,50 @@ def HfmnTree.encodeWithDepth (c : Char) : HfmnTree → Option (BoolList × Nat)
   | .Leaf c' _ _ => 
     if c = c' then some ([], 0) else none
   | .node l r _w =>
-    -- Has an underlying assumption, every digit increase in code, depth +=1 too.
+    -- Has an underlying assumption, every digit increase in code, depth +=1 too, which is proved in the next theorem
     match l.encodeWithDepth c, r.encodeWithDepth c with
     | none, some (s, d) => some ([true] ++ s, d + 1)
     | some (s, d), none => some ([false] ++ s, d + 1)
     | _, _ => none
+
 
 def HfmnTree.encode (c : Char) (t : HfmnTree) : Option BoolList :=
   (t.encodeWithDepth c).map (·.1)
 
 def HfmnTree.depth (c : Char) (t : HfmnTree) : Option Nat :=
   (t.encodeWithDepth c).map (·.2)
+
+theorem HfmnTree.depth_is_length_enc (c: Char) (t: HfmnTree) (code : BoolList) :
+  t.encode c = code → t.depth c = code.length := by
+    cases t
+    case Leaf c' w cc =>
+      simp [encode, depth, encodeWithDepth]
+      intro h₁ h₂
+      simp [h₁, h₂]
+    case node l r _w =>
+      match p:l.encodeWithDepth c, p':r.encodeWithDepth c with
+      | none, some (s, d) =>
+        simp [encode, depth, encodeWithDepth, p, p']
+        intro h
+        match code with
+        | ch :: ct =>
+          let ihr := HfmnTree.depth_is_length_enc c r ct
+          simp [encode, depth, encodeWithDepth, p, p'] at ihr
+          simp at h
+          simp [List.length_cons, ihr, h]
+      | some (s, d), none =>
+        simp [encode, depth, encodeWithDepth, p, p']
+        intro h
+        match code with
+        | ch :: ct =>
+          let ihl := HfmnTree.depth_is_length_enc c l ct
+          simp [encode, depth, encodeWithDepth, p, p'] at ihl
+          simp at h
+          simp [List.length_cons, ihl, h]
+      | none, none =>
+        simp [encode, depth, encodeWithDepth, p, p']
+      | some (s, d), some (s', d') =>
+        simp [encode, depth, encodeWithDepth, p, p']
 
 structure Alphabet where
   char : Char
