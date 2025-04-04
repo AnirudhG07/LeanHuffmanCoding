@@ -81,6 +81,18 @@ partial def HfmnTree.merge (trees : List HfmnTree) : List HfmnTree :=
 
 def eg : BoolList := [true, false, true, false]
 
+def depthAux (tree: HfmnTree) (c: Char) (d: Int) : Int :=
+  match tree with
+  | HfmnTree.Leaf c' _ _ => if c = c' then d else -1
+  | HfmnTree.node l r _ =>
+    let leftDepth := depthAux l c (d + 1)
+    if leftDepth != -1 then leftDepth else depthAux r c (d + 1)    
+
+-- Returns the depth of a character in the Huffman tree, if not found returns -1
+def HfmnTree.find_depth (tree: HfmnTree) (c: Char) : Int :=
+  -- Helper function to calculate the depth of a character in the tree
+  depthAux tree c 0 
+
 -- Encode a character in a Huffman tree
 def HfmnTree.encodeWithDepth (c : Char) : HfmnTree → Option (BoolList × Nat)
   | .Leaf c' _ _ => 
@@ -183,18 +195,6 @@ def Huffmann.least_encoded_data (huffinput : AlphaNumList) : Nat :=
   huffinput.foldl (fun acc a => acc + (encoded.find? (·.1 = a.1) |>.get!.2).length * a.2) 0
 
 -- #eval Huffmann.least_encoded_data eg₁ -- 224
-
-def depthAux (tree: HfmnTree) (c: Char) (d: Int) : Int :=
-  match tree with
-  | HfmnTree.Leaf c' _ _ => if c = c' then d else -1
-  | HfmnTree.node l r _ =>
-    let leftDepth := depthAux l c (d + 1)
-    if leftDepth != -1 then leftDepth else depthAux r c (d + 1)    
-
--- Returns the depth of a character in the Huffman tree, if not found returns -1
-def HfmnTree.manual_depth (tree: HfmnTree) (c: Char) : Int :=
-  -- Helper function to calculate the depth of a character in the tree
-  depthAux tree c 0 
 
 -- #eval HfmnTree.manual_depth (HfmnTree.tree eg₁ ) 'a' -- 1
 
