@@ -82,14 +82,15 @@ partial def HfmnTree.merge (trees : List HfmnTree) : List HfmnTree :=
 def eg : BoolList := [true, false, true, false]
 
 def depthAux (tree: HfmnTree) (c: Char) (d: Int) : Int :=
+  -- c is the character to find, d is the depth in the tree
   match tree with
   | HfmnTree.Leaf c' _ _ => if c = c' then d else -1
   | HfmnTree.node l r _ =>
     let leftDepth := depthAux l c (d + 1)
-    if leftDepth != -1 then leftDepth else depthAux r c (d + 1)    
+    if leftDepth != -1 then leftDepth else depthAux r c (d + 1) 
 
 -- Returns the depth of a character in the Huffman tree, if not found returns -1
-def HfmnTree.find_depth (tree: HfmnTree) (c: Char) : Int :=
+def HfmnTree.findDepth (tree: HfmnTree) (c: Char) : Int :=
   -- Helper function to calculate the depth of a character in the tree
   depthAux tree c 0 
 
@@ -103,7 +104,6 @@ def HfmnTree.encodeWithDepth (c : Char) : HfmnTree → Option (BoolList × Nat)
     | none, some (s, d) => some ([true] ++ s, d + 1)
     | some (s, d), none => some ([false] ++ s, d + 1)
     | _, _ => none
-
 
 def HfmnTree.encode (c : Char) (t : HfmnTree) : Option BoolList :=
   (t.encodeWithDepth c).map (·.1)
@@ -142,6 +142,50 @@ theorem HfmnTree.depth_is_length_enc (c: Char) (t: HfmnTree) (code : BoolList) :
         simp [encode, depth, encodeWithDepth, p, p']
       | some (s, d), some (s', d') =>
         simp [encode, depth, encodeWithDepth, p, p']
+
+-- #eval depthAux (HfmnTree.Leaf 'a' 1) 'a' 0 -- 0
+#eval depthAux (HfmnTree.node (HfmnTree.Leaf 'a' 1) (HfmnTree.Leaf 'b' 2) 3) 'a' 0
+
+theorem HfmnTree.find_depth_is_length_enc (c: Char) (t: HfmnTree) (code : BoolList) :
+  t.encode c = code → t.findDepth c = code.length := by
+    cases t
+    case Leaf c' w cc =>
+      simp [encode, HfmnTree.findDepth, encodeWithDepth]
+      intro h₁ h₂
+      simp [h₁, h₂, depthAux]
+
+    case node l r _w =>
+      match p: l.encodeWithDepth c, p': r.encodeWithDepth c with
+      | none, some (s, d) =>
+        simp [encode, HfmnTree.findDepth, encodeWithDepth, p, p']
+        intro h
+        match code with
+        | ch :: ct =>
+          let ihr := find_depth_is_length_enc c r ct
+          simp [encode, HfmnTree.findDepth, encodeWithDepth, p, p'] at ihr
+          simp at h
+          simp [List.length_cons, ihr, h]
+          simp [depthAux]
+          -- TODO:
+          sorry 
+
+
+      | some (s, d), none =>
+        simp [encode, HfmnTree.findDepth, encodeWithDepth, p, p']
+        intro h
+        match code with
+        | ch :: ct =>
+          let ihl := find_depth_is_length_enc c l ct
+          simp [encode, HfmnTree.findDepth, encodeWithDepth, p, p'] at ihl
+          simp at h
+          simp [List.length_cons, ihl, h]
+          -- TODO:
+          sorry
+
+      | none, none =>
+        simp [encode, HfmnTree.findDepth, encodeWithDepth, p, p']
+      | some (s, d), some (s', d') =>
+        simp [encode, HfmnTree.findDepth, encodeWithDepth, p, p']
 
 structure Alphabet where
   char : Char
@@ -210,6 +254,15 @@ def HfmnTree.valid_leaf_or_node (bl: BoolList) (tree: HfmnTree) : Bool :=
       else valid_leaf_or_node bs l
 
 -- #eval HfmnTree.valid_path_of_tree [true, false, true] (HfmnTree.tree eg₁) -- true
+
+def HfmnTree.charInTree (tree: HfmnTree) (c: Char) : Bool :=
+  match tree with
+  | HfmnTree.Leaf c' _ _ => c = c'
+  | HfmnTree.node l r _ =>
+    HfmnTree.charInTree l c || HfmnTree.charInTree r c
+
+-- the characters in any left and right tree are disjoint
+theorem left_right_tree_disjoint_chars (tree: HfmnTree) :
 
 -- check if 2 BoolEncList are prefix free of each other
 def checkPrefixfree (bl₁ bl₂: BoolList) : Bool :=
