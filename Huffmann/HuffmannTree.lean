@@ -23,7 +23,7 @@ inductive HfmnTree where
 deriving Inhabited, Repr
 
 -- Theorem: Strings inputs in a Huffman tree are only at the leaves
-theorem inputs_at_leaves (tree : HfmnTree) :
+theorem chars_at_leaves (tree : HfmnTree) :
   ∀ (c : Char), (∃ (w : Nat) (code : BoolList), tree = HfmnTree.Leaf c w code) ↔ 
   (∃ (leaf : HfmnTree), (∃ (w : Nat) (code : BoolList), leaf = HfmnTree.Leaf c w code) ∧ tree = leaf) := by
   intro c
@@ -38,12 +38,6 @@ theorem inputs_at_leaves (tree : HfmnTree) :
     rcases h with ⟨leaf, ⟨w, code, h_leaf⟩, h_tree⟩
     exists w, code
     rw [h_tree, h_leaf]
-
-def HfmnTree.charInTree (tree: HfmnTree) (c: Char) : Bool :=
-  match tree with
-  | HfmnTree.Leaf c' _ _ => c = c'
-  | Node l r  =>
-    HfmnTree.charInTree l c || HfmnTree.charInTree r c
 
 def HfmnTree.weight : HfmnTree → Nat
   | Leaf _ w _ => w
@@ -75,6 +69,10 @@ def HfmnTree.sort (trees : List HfmnTree) : List HfmnTree := insertionSort trees
 
 def String.freq (s : String) (c : Char) := s.data.filter (· == c) |>.length
 -- #eval "hello".freq 'l' --2
+
+def merge_trees (t1 t2 : HfmnTree) : HfmnTree :=
+  -- If t1 t2 is either Leaf or Node, when merged, it will be a Node
+  HfmnTree.Node t1 t2 
 
 partial def HfmnTree.merge (trees : List HfmnTree) : List HfmnTree :=
   let sorted := HfmnTree.sort trees
@@ -204,12 +202,8 @@ def convert_input_to_alphabet (input : AlphaNumList) : AlphaNumTree := input.map
 
 -- Returns the Binary Tree of the Huffman encoding, without the encoded strings
 def HfmnTree.tree (huffinput : AlphaNumList) : HfmnTree :=
-  -- Handle []
-  if huffinput.isEmpty then
+  if huffinput.isEmpty then -- Handle []
     HfmnTree.Leaf ' ' 0
-  else if huffinput.length = 1 then
-    let a := huffinput.head!
-    HfmnTree.Leaf a.1 a.2
   else
     let input := convert_input_to_alphabet huffinput
     let leaves : List HfmnTree := input.map (fun a => HfmnTree.Leaf a.char a.freq)
@@ -221,9 +215,7 @@ def HfmnTree.encodedList (huffinput : AlphaNumList) : BoolEncList:=
   let tree := HfmnTree.tree huffinput
   let input := convert_input_to_alphabet huffinput
   let enc_list := input.map (fun a => (a.char, tree.encode a.char |>.get!))
-
   enc_list
-
 
 -- #eval (HfmnTree.encodedList eg₁)
 --   [('a', [false]),
@@ -259,32 +251,25 @@ def HfmnTree.chars : HfmnTree → List Char
   | Leaf c _ _ => [c]
   | Node l r => l.chars ++ r.chars
 
-
 -- Helper list intersection function
 def List.inter (l₁ l₂ : List Char) : List Char :=
   l₁.filter (· ∈ l₂)
 
-def disjointChars' (t : HfmnTree) : Prop :=
-  match t with 
-  | HfmnTree.Leaf _ _ _ => True
-  | HfmnTree.Node l r =>
-    let l_chars := l.charInTree
-    let r_chars := r.charInTree
-    ∀ c, (l_chars c ∧ r_chars c) → False
-
+def HfmnTree.charInTree (t : HfmnTree) (c : Char) : Bool :=
+  t.chars.contains c
 
 def disjointChars (t : HfmnTree) : Prop :=
   match t with 
   | HfmnTree.Leaf _ _ _ => True
   | HfmnTree.Node l r =>
-    l.chars.inter r.chars = [] ∧ disjointChars l ∧ disjointChars r
+    [] = l.chars.inter r.chars
 
 -- Theorem: Merge of two trees with disjoint characters is disjoint
 theorem merge_preserves_disjoint_chars {l r : HfmnTree} :
-  disjointChars l → disjointChars r → l.chars.inter r.chars = [] → disjointChars (HfmnTree.Node l r) := by
+  disjointChars l → disjointChars r → l.chars.inter r.chars = [] → disjointChars (merge_trees l r) := by
   intro h₁ h₂ h₃
-  simp [disjointChars]
-  simp [h₁, h₂, h₃]
+  simp [merge_trees, disjointChars] 
+  assumption
 
 -- the characters in any left and right tree are disjoint
 theorem left_right_tree_disjoint_chars (huffinput: AlphaNumList) :
@@ -295,8 +280,8 @@ theorem left_right_tree_disjoint_chars (huffinput: AlphaNumList) :
   | cons a rest ih =>
     match rest with 
     | [] => -- Base case: if the list is empty, the tree is a leaf
-      sorry  
-    | [b] => -- Only 1 element
+      sorry
+    | [b] => -- Only 1 element      
       sorry
     | b :: rest' =>
       sorry 
@@ -311,6 +296,10 @@ def checkPrefixfree (bl₁ bl₂: BoolList) : Bool :=
 def isPrefixfree : BoolEncList → Bool
   | [] => true
   | (_, bl) :: rest => rest.all (fun al => checkPrefixfree bl al.2) && isPrefixfree rest
+
+def prefixFreeTree (huffinput : AlphaNumList) : Prop :=
+  let enc_list := HfmnTree.encodedList huffinput
+  isPrefixfree enc_list
 
 -- #eval isPrefixfree (HfmnTree.encoded_tree eg₁).1 -- true
 
