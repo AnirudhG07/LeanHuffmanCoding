@@ -22,16 +22,6 @@ inductive HfmnTree where
   | Leaf (c : Char) (weight : Nat) (code : BoolList := [])
 deriving Inhabited, Repr
 
-def Hfmntree.left (tree : HfmnTree) : Option HfmnTree :=
-  match tree with
-  | HfmnTree.Node l _ _ => some l
-  | HfmnTree.Leaf _ _ _ => none
-
-def Hfmntree.right (tree : HfmnTree) : Option HfmnTree :=
-  match tree with
-  | HfmnTree.Node _ r _ => some r
-  | HfmnTree.Leaf _ _ _ => none
-
 -- Theorem: Strings inputs in a Huffman tree are only at the leaves
 theorem inputs_at_leaves (tree : HfmnTree) :
   ∀ (c : Char), (∃ (w : Nat) (code : BoolList), tree = HfmnTree.Leaf c w code) ↔ 
@@ -127,6 +117,7 @@ def HfmnTree.encode (c : Char) (t : HfmnTree) : Option BoolList :=
 def HfmnTree.depth (c : Char) (t : HfmnTree) : Option Nat :=
   (t.encodeWithDepth c).map (·.2)
 
+-- Theorem: Depth is equal to the length of the code
 theorem HfmnTree.depth_is_length_enc (c: Char) (t: HfmnTree) (code : BoolList) :
   t.encode c = code → t.depth c = code.length := by
     cases t
@@ -160,7 +151,7 @@ theorem HfmnTree.depth_is_length_enc (c: Char) (t: HfmnTree) (code : BoolList) :
         simp [encode, depth, encodeWithDepth, p, p']
 
 -- #eval depthAux (HfmnTree.Leaf 'a' 1) 'a' 0 -- 0
-#eval depthAux (HfmnTree.Node (HfmnTree.Leaf 'a' 1) (HfmnTree.Leaf 'b' 2) 3) 'a' 0
+-- #eval depthAux (HfmnTree.Node (HfmnTree.Leaf 'a' 1) (HfmnTree.Leaf 'b' 2) 3) 'a' 0
 
 theorem HfmnTree.find_depth_is_length_enc (c: Char) (t: HfmnTree) (code : BoolList) :
   t.encode c = code → t.findDepth c = code.length := by
@@ -185,7 +176,6 @@ theorem HfmnTree.find_depth_is_length_enc (c: Char) (t: HfmnTree) (code : BoolLi
           -- TODO:
           sorry 
 
-
       | some (s, d), none =>
         simp [encode, HfmnTree.findDepth, encodeWithDepth, p, p']
         intro h
@@ -197,7 +187,6 @@ theorem HfmnTree.find_depth_is_length_enc (c: Char) (t: HfmnTree) (code : BoolLi
           simp [List.length_cons, ihl, h]
           -- TODO:
           sorry
-
       | none, none =>
         simp [encode, HfmnTree.findDepth, encodeWithDepth, p, p']
       | some (s, d), some (s', d') =>
@@ -235,7 +224,7 @@ def HfmnTree.encoded_tree (huffinput : AlphaNumList) : (BoolEncList × HfmnTree)
   let tree' := addCode tree []
   (enc_list, tree')
 
--- #eval (HfmnTree.encoded_tree eg₁).1 =
+-- #eval (HfmnTree.encoded_tree eg₁).2
 --   [('a', [false]),
 --   ('b', [true, false, true]),
 --   ('c', [true, false, false]),
@@ -271,32 +260,18 @@ def HfmnTree.valid_leaf_or_node (bl: BoolList) (tree: HfmnTree) : Bool :=
 
 -- #eval HfmnTree.valid_path_of_tree [true, false, true] (HfmnTree.tree eg₁) -- true
 
--- the characters in any left and right tree are disjoint
-theorem left_right_tree_disjoint_chars (t : HfmnTree) (c : Char) :
-  match t with
+def disjointChars (t : HfmnTree) : Prop :=
+  match t with 
+  | HfmnTree.Leaf c _ _ => True
   | HfmnTree.Node l r _ =>
-    t.charInTree c ↔ (l.charInTree c ∧ ¬ r.charInTree c) ∨ (r.charInTree c ∧ ¬ l.charInTree c)
-  | HfmnTree.Leaf c' _ _ =>
-    t.charInTree c ↔ c = c'
-  := by
-    cases t
-    case Leaf c' w bl =>
-      simp
-      simp [HfmnTree.charInTree]
- 
-    case Node l r _w =>
-      simp
-      simp [HfmnTree.charInTree]
-      let bll := HfmnTree.encode c l |>.get!
-      let blr := HfmnTree.encode c r |>.get!
+    let l_chars := l.charInTree
+    let r_chars := r.charInTree
+    ∀ c, (l_chars c ∧ r_chars c) → False
 
-      constructor
-      case mp =>       
-        intro h
-        sorry
-      case mpr =>
-        sorry
-  
+-- the characters in any left and right tree are disjoint
+theorem left_right_tree_disjoint_chars (huffinput: AlphaNumList) :
+  disjointChars (HfmnTree.tree huffinput) := by
+    sorry
 
 -- check if 2 BoolEncList are prefix free of each other
 def checkPrefixfree (bl₁ bl₂: BoolList) : Bool :=
