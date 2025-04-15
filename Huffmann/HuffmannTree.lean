@@ -18,7 +18,7 @@ def conv_str_freq_boollist (s : CharEncodedList) : BoolEncList :=
 
 -- Huffman Tree Definition
 inductive HfmnTree where
-  | Node (left : HfmnTree) (right : HfmnTree) (weight : Nat)
+  | Node (left : HfmnTree) (right : HfmnTree) -- (weight : Nat)
   | Leaf (c : Char) (weight : Nat) (code : BoolList := [])
 deriving Inhabited, Repr
 
@@ -42,12 +42,12 @@ theorem inputs_at_leaves (tree : HfmnTree) :
 def HfmnTree.charInTree (tree: HfmnTree) (c: Char) : Bool :=
   match tree with
   | HfmnTree.Leaf c' _ _ => c = c'
-  | Node l r _ =>
+  | Node l r  =>
     HfmnTree.charInTree l c || HfmnTree.charInTree r c
 
 def HfmnTree.weight : HfmnTree → Nat
   | Leaf _ w _ => w
-  | Node _ _ w => w
+  | Node l r => l.weight + r.weight
 
 -- Comparison function for Huffman trees weights
 def HfmnTree.compare (s s' : HfmnTree) : Ordering :=
@@ -82,7 +82,7 @@ partial def HfmnTree.merge (trees : List HfmnTree) : List HfmnTree :=
   | [] => []
   | [tree] => [tree]
   | t1 :: t2 :: rest =>
-    let t' := Node t1 t2 (t1.weight + t2.weight)
+    let t' := Node t1 t2 
     HfmnTree.merge (t' :: rest)
 
 def eg : BoolList := [true, false, true, false]
@@ -91,7 +91,7 @@ def depthAux (tree: HfmnTree) (c: Char) (d: Int) : Int :=
   -- c is the character to find, d is the depth in the tree
   match tree with
   | HfmnTree.Leaf c' _ _ => if c = c' then d else -1
-  | HfmnTree.Node l r _ =>
+  | HfmnTree.Node l r =>
     let leftDepth := depthAux l c (d + 1)
     if leftDepth != -1 then leftDepth else depthAux r c (d + 1) 
 
@@ -104,7 +104,7 @@ def HfmnTree.findDepth (tree: HfmnTree) (c: Char) : Int :=
 def HfmnTree.encodeWithDepth (c : Char) : HfmnTree → Option (BoolList × Nat)
   | .Leaf c' _ _ => 
     if c = c' then some ([], 0) else none
-  | Node l r _w =>
+  | Node l r =>
     -- Has an underlying assumption, every digit increase in code, depth +=1 too, which is proved in the next theorem
     match l.encodeWithDepth c, r.encodeWithDepth c with
     | none, some (s, d) => some ([true] ++ s, d + 1)
@@ -125,7 +125,7 @@ theorem HfmnTree.depth_is_length_enc (c: Char) (t: HfmnTree) (code : BoolList) :
       simp [encode, depth, encodeWithDepth]
       intro h₁ h₂
       simp [h₁, h₂]
-    case Node l r _w =>
+    case Node l r =>
       match p:l.encodeWithDepth c, p':r.encodeWithDepth c with
       | none, some (s, d) =>
         simp [encode, depth, encodeWithDepth, p, p']
@@ -161,7 +161,7 @@ theorem HfmnTree.find_depth_is_length_enc (c: Char) (t: HfmnTree) (code : BoolLi
       intro h₁ h₂
       simp [h₁, h₂, depthAux]
 
-    case Node l r _w =>
+    case Node l r =>
       match p: l.encodeWithDepth c, p': r.encodeWithDepth c with
       | none, some (s, d) =>
         simp [encode, HfmnTree.findDepth, encodeWithDepth, p, p']
@@ -217,28 +217,15 @@ def HfmnTree.tree (huffinput : AlphaNumList) : HfmnTree :=
     tree
 
 -- Encode a string in a Huffman tree
-def HfmnTree.encodedTreeList (huffinput : AlphaNumList) : (BoolEncList × HfmnTree):=
+def HfmnTree.encodedList (huffinput : AlphaNumList) : BoolEncList:=
   let tree := HfmnTree.tree huffinput
   let input := convert_input_to_alphabet huffinput
   let enc_list := input.map (fun a => (a.char, tree.encode a.char |>.get!))
-  -- Add this to the tree
-  let rec addCode (tree : HfmnTree) (code : BoolList) : HfmnTree :=
-    match tree with
-    | HfmnTree.Leaf c w _ => HfmnTree.Leaf c w code
-    | Node l r w => Node (addCode l (code ++ [false])) (addCode r (code ++ [true])) w
 
-  let tree' := addCode tree []
-  (enc_list, tree')
-
-def HfmnTree.encoded_list (huffinput : AlphaNumList) : BoolEncList :=
-  let (enc_list, _) := HfmnTree.encodedTreeList huffinput
   enc_list
 
-def HfmnTree.encoded_tree (huffinput : AlphaNumList) : HfmnTree :=
-  let (_, tree) := HfmnTree.encodedTreeList huffinput
-  tree
 
--- #eval (HfmnTree.encoded_tree eg₁).2
+-- #eval (HfmnTree.encodedList eg₁)
 --   [('a', [false]),
 --   ('b', [true, false, true]),
 --   ('c', [true, false, false]),
@@ -246,15 +233,8 @@ def HfmnTree.encoded_tree (huffinput : AlphaNumList) : HfmnTree :=
 --   ('e', [true, true, false, true]),
 --   ('f', [true, true, false, false])]
 
--- #eval (HfmnTree.encoded_tree [('B', 7),('C', 6),('A', 3),('D', 1),('E', 1),]).1 = 
--- [('B', [false]),
---  ('C', [true, true]),
---  ('A', [true, false, true]),
---  ('D', [true, false, false, true]),
---  ('E', [true, false, false, false])]
-
 def Huffmann.least_encoded_data (huffinput : AlphaNumList) : Nat :=
-  let encoded := (HfmnTree.encoded_tree huffinput).1
+  let encoded := (HfmnTree.encodedList huffinput)
   huffinput.foldl (fun acc a => acc + (encoded.find? (·.1 = a.1) |>.get!.2).length * a.2) 0
 
 -- #eval Huffmann.least_encoded_data eg₁ -- 224
@@ -265,7 +245,7 @@ def Huffmann.least_encoded_data (huffinput : AlphaNumList) : Nat :=
 def HfmnTree.valid_leaf_or_node (bl: BoolList) (tree: HfmnTree) : Bool :=
   match tree with
   | HfmnTree.Leaf _ _ _ => bl.isEmpty
-  | Node l r _ =>
+  | Node l r =>
     match bl with
     | [] => false
     | b :: bs =>
@@ -277,7 +257,7 @@ def HfmnTree.valid_leaf_or_node (bl: BoolList) (tree: HfmnTree) : Bool :=
 -- chars returns the set of characters in the tree
 def HfmnTree.chars : HfmnTree → List Char
   | Leaf c _ _ => [c]
-  | Node l r _ => l.chars ++ r.chars
+  | Node l r => l.chars ++ r.chars
 
 
 -- Helper list intersection function
@@ -287,7 +267,7 @@ def List.inter (l₁ l₂ : List Char) : List Char :=
 def disjointChars' (t : HfmnTree) : Prop :=
   match t with 
   | HfmnTree.Leaf _ _ _ => True
-  | HfmnTree.Node l r _ =>
+  | HfmnTree.Node l r =>
     let l_chars := l.charInTree
     let r_chars := r.charInTree
     ∀ c, (l_chars c ∧ r_chars c) → False
@@ -296,12 +276,12 @@ def disjointChars' (t : HfmnTree) : Prop :=
 def disjointChars (t : HfmnTree) : Prop :=
   match t with 
   | HfmnTree.Leaf _ _ _ => True
-  | HfmnTree.Node l r _ =>
+  | HfmnTree.Node l r =>
     l.chars.inter r.chars = [] ∧ disjointChars l ∧ disjointChars r
 
 -- Theorem: Merge of two trees with disjoint characters is disjoint
 theorem merge_preserves_disjoint_chars {l r : HfmnTree} :
-  disjointChars l → disjointChars r → l.chars.inter r.chars = [] → disjointChars (HfmnTree.Node l r (l.weight + r.weight)) := by
+  disjointChars l → disjointChars r → l.chars.inter r.chars = [] → disjointChars (HfmnTree.Node l r) := by
   intro h₁ h₂ h₃
   simp [disjointChars]
   simp [h₁, h₂, h₃]
