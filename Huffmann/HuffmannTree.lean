@@ -65,12 +65,32 @@ def insertionSort {α : Type} [Ord α] : List α → List α
 
 -- #check insertionSort
 
+theorem orderedinsert_inc_length {α : Type} [Ord α] (a : α) (l : List α) :
+  (orderedInsert a l).length = l.length + 1 := by
+  induction l with
+  | nil => simp [orderedInsert]
+  | cons h t ih =>
+    simp [orderedInsert]
+    split <;> simp [ih]
+
+theorem insertionsort_preserves_length {α : Type} [Ord α] :
+  ∀ l : List α, (insertionSort l).length = l.length := by
+  intro l
+  induction l with
+  | nil => simp [insertionSort]
+  | cons b l ih =>
+    simp [insertionSort, ih]
+    have h := orderedinsert_inc_length b (insertionSort l)
+    rw [h]
+    simp [List.length_cons]
+    assumption
+
 def HfmnTree.sort (trees : List HfmnTree) : List HfmnTree := insertionSort trees
 
 def String.freq (s : String) (c : Char) := s.data.filter (· == c) |>.length
 -- #eval "hello".freq 'l' --2
 
-def merge_trees (t1 t2 : HfmnTree) : HfmnTree :=
+def mergeTrees (t1 t2 : HfmnTree) : HfmnTree :=
   -- If t1 t2 is either Leaf or Node, when merged, it will be a Node
   HfmnTree.Node t1 t2 
 
@@ -225,11 +245,11 @@ def HfmnTree.encodedList (huffinput : AlphaNumList) : BoolEncList:=
 --   ('e', [true, true, false, true]),
 --   ('f', [true, true, false, false])]
 
-def Huffmann.least_encoded_data (huffinput : AlphaNumList) : Nat :=
+def Huffmann.leastEncodedData (huffinput : AlphaNumList) : Nat :=
   let encoded := (HfmnTree.encodedList huffinput)
   huffinput.foldl (fun acc a => acc + (encoded.find? (·.1 = a.1) |>.get!.2).length * a.2) 0
 
--- #eval Huffmann.least_encoded_data eg₁ -- 224
+-- #eval Huffmann.leastEncodedData eg₁ -- 224
 
 -- #eval HfmnTree.manual_depth (HfmnTree.tree eg₁ ) 'a' -- 1
 
@@ -266,9 +286,9 @@ def disjointChars (t : HfmnTree) : Prop :=
 
 -- Theorem: Merge of two trees with disjoint characters is disjoint
 theorem merge_preserves_disjoint_chars {l r : HfmnTree} :
-  disjointChars l → disjointChars r → l.chars.inter r.chars = [] → disjointChars (merge_trees l r) := by
+  disjointChars l → disjointChars r → l.chars.inter r.chars = [] → disjointChars (mergeTrees l r) := by
   intro h₁ h₂ h₃
-  simp [merge_trees, disjointChars] 
+  simp [mergeTrees, disjointChars] 
   assumption
 
 -- the characters in any left and right tree are disjoint
