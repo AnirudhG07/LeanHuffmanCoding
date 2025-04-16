@@ -58,6 +58,22 @@ def orderedInsert {α : Type} [Ord α] (a : α) : List α → List α
     | .lt => a :: b :: l
     | _ => b :: orderedInsert a l
 
+theorem orderedInsert_nonempty {α : Type} [Ord α] (a : α) (l : List α) :
+  (orderedInsert a l).length > 0 := by
+  induction l with
+  | nil => simp [orderedInsert]
+  | cons b t ih =>
+    simp [orderedInsert]
+    split <;> simp [List.length, ih, Nat.zero_lt_succ]
+    
+theorem orderedInsert_inc_length {α : Type} [Ord α] (a : α) (l : List α) :
+  (orderedInsert a l).length = l.length + 1 := by
+  induction l with
+  | nil => simp [orderedInsert]
+  | cons h t ih =>
+    simp [orderedInsert]
+    split <;> simp [ih]
+    
 -- insertion sort 
 def insertionSort {α : Type} [Ord α] : List α → List α
   | [] => []
@@ -65,27 +81,19 @@ def insertionSort {α : Type} [Ord α] : List α → List α
 
 -- #check insertionSort
 
-theorem orderedinsert_inc_length {α : Type} [Ord α] (a : α) (l : List α) :
-  (orderedInsert a l).length = l.length + 1 := by
-  induction l with
-  | nil => simp [orderedInsert]
-  | cons h t ih =>
-    simp [orderedInsert]
-    split <;> simp [ih]
-
-theorem insertionsort_preserves_length {α : Type} [Ord α] :
+theorem insertionSort_preserves_length {α : Type} [Ord α] :
   ∀ l : List α, (insertionSort l).length = l.length := by
   intro l
   induction l with
   | nil => simp [insertionSort]
   | cons b l ih =>
     simp [insertionSort, ih]
-    have h := orderedinsert_inc_length b (insertionSort l)
+    have h := orderedInsert_inc_length b (insertionSort l)
     rw [h]
     simp [List.length_cons]
     assumption
 
-def HfmnTree.sort (trees : List HfmnTree) : List HfmnTree := insertionSort trees
+-- def HfmnTree.sort (trees : List HfmnTree) : List HfmnTree := insertionSort trees
 
 def String.freq (s : String) (c : Char) := s.data.filter (· == c) |>.length
 -- #eval "hello".freq 'l' --2
@@ -94,14 +102,32 @@ def mergeTrees (t1 t2 : HfmnTree) : HfmnTree :=
   -- If t1 t2 is either Leaf or Node, when merged, it will be a Node
   HfmnTree.Node t1 t2 
 
-partial def HfmnTree.merge (trees : List HfmnTree) : List HfmnTree :=
-  let sorted := HfmnTree.sort trees
-  match sorted with
-  | [] => []
-  | [tree] => [tree]
+
+theorem sorted_nonempty_is_nonempty (trees : List HfmnTree) (h : trees ≠ []) :
+  insertionSort trees ≠ [] := by
+  have h₁ : (insertionSort trees).length = trees.length := by
+    apply insertionSort_preserves_length
+  have h₂: (insertionSort trees).length > 0 := by
+    rw [h₁]
+    simp [List.length, h]
+    simp [List.length_pos_iff]
+    exact h
+  simp [List.ne_nil_of_length_pos, h₂]
+
+
+partial def HfmnTree.merge (trees: List HfmnTree) (h: trees ≠ []) : Option HfmnTree :=
+  let sorted := insertionSort trees
+  have hp: sorted ≠ [] := by
+    apply sorted_nonempty_is_nonempty
+    exact h
+ 
+  match p:sorted with
+  | [] => none
+  | [t] => some t
   | t1 :: t2 :: rest =>
-    let t' := Node t1 t2 
-    HfmnTree.merge (t' :: rest)
+    let newTree := mergeTrees t1 t2
+    HfmnTree.merge (newTree :: rest) (by simp)
+
 
 def eg : BoolList := [true, false, true, false]
 
@@ -227,7 +253,9 @@ def HfmnTree.tree (huffinput : AlphaNumList) : HfmnTree :=
   else
     let input := convert_input_to_alphabet huffinput
     let leaves : List HfmnTree := input.map (fun a => HfmnTree.Leaf a.char a.freq)
-    let tree : HfmnTree := HfmnTree.merge leaves |>.head!
+    let tree : HfmnTree := HfmnTree.merge leaves (by
+      sorry
+    )
     tree
 
 -- Encode a string in a Huffman tree
