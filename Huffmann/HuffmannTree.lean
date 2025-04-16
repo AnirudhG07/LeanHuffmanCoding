@@ -252,17 +252,53 @@ abbrev AlphaNumTree := List Alphabet
 
 def convert_input_to_alphabet (input : AlphaNumList) : AlphaNumTree := input.map fun a => Alphabet.mk a.1 a.2
 
+theorem cita_ne_to_ne (s : AlphaNumList) (h : s ≠ []) :
+  convert_input_to_alphabet s ≠ [] := by
+  intro hi
+  have h₁ : (convert_input_to_alphabet s).length = s.length := by
+    apply List.length_map
+  have h₂ : (convert_input_to_alphabet s).length = 0 := by
+    rw [hi]
+    simp [List.length, List.length_map] 
+  have h₃ : (convert_input_to_alphabet s).length > 0 := by
+    rw [h₁]
+    simp [List.length, h, List.length_pos_iff] 
+  rw [h₂] at h₃
+  exact Nat.lt_irrefl 0 h₃
+
 -- Returns the Binary Tree of the Huffman encoding, without the encoded strings
 def HfmnTree.tree (huffinput : AlphaNumList) : HfmnTree :=
-  if huffinput.isEmpty then -- Handle []
+  if p:huffinput.isEmpty then -- Handle []
     HfmnTree.Leaf ' ' 0
   else
+    have huffinput_nonempty : huffinput ≠ [] := by intro h₁; rw [h₁] at p; simp at p        
+
     let input := convert_input_to_alphabet huffinput
+    have hi : input ≠ [] := by
+      apply cita_ne_to_ne
+      exact huffinput_nonempty 
+
     let leaves : List HfmnTree := input.map (fun a => HfmnTree.Leaf a.char a.freq)
-    let tree : HfmnTree := HfmnTree.merge leaves (by
-      sorry
-    )
-    tree
+    have hl : leaves ≠ [] := by
+      intro h
+      have h₁ : (leaves).length = (input).length := by
+        apply List.length_map
+      have h₂ : (leaves).length = 0 := by
+        rw [h]
+        simp [List.length, List.length_map]
+      have h₃ : (leaves).length > 0 := by
+        rw [h₁]
+        simp [List.length, huffinput_nonempty, List.length_pos_iff, hi]
+      rw [h₂] at h₃
+      exact Nat.lt_irrefl 0 h₃
+
+    let sorted := insertionSort leaves
+        
+    have sorted_nonempty : sorted ≠ [] := by
+      apply sorted_nonempty_is_nonempty
+      exact hl
+
+    HfmnTree.merge sorted (by simp [sorted_nonempty] )
 
 -- Encode a string in a Huffman tree
 def HfmnTree.encodedList (huffinput : AlphaNumList) : BoolEncList:=
