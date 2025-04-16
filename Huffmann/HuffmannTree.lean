@@ -115,18 +115,24 @@ theorem sorted_nonempty_is_nonempty (trees : List HfmnTree) (h : trees ≠ []) :
   simp [List.ne_nil_of_length_pos, h₂]
 
 
-partial def HfmnTree.merge (trees: List HfmnTree) (h: trees ≠ []) : Option HfmnTree :=
+def HfmnTree.merge (trees: List HfmnTree) (h: trees ≠ []) : HfmnTree :=
   let sorted := insertionSort trees
   have hp: sorted ≠ [] := by
     apply sorted_nonempty_is_nonempty
     exact h
- 
+
   match p:sorted with
-  | [] => none
-  | [t] => some t
+  | [] => by simp at hp
+  | [t] => t
   | t1 :: t2 :: rest =>
     let newTree := mergeTrees t1 t2
+    have : rest.length + 1 < trees.length := by
+      have h₁ : sorted.length = trees.length := by apply insertionSort_preserves_length
+      rw [← h₁]
+      simp [p]
     HfmnTree.merge (newTree :: rest) (by simp)
+termination_by trees.length
+
 
 
 def eg : BoolList := [true, false, true, false]
