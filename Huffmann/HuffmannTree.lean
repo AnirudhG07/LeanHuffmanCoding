@@ -312,8 +312,10 @@ def HfmnTree.tree {α : Type} [HfmnType α] (huffinput : AlphaNumList α) : Hfmn
 def HfmnTree.encodedList {α : Type} [HfmnType α] (huffinput : AlphaNumList α) : BoolEncList α :=
   let tree := HfmnTree.tree huffinput
   let input := convert_input_to_alphabet huffinput
-  input.map (fun a => (a.char, (tree.encode a.char).get!))
-
+  input.map (fun a => 
+    let encoding := tree.encode a.char
+    (a.char, encoding.getD [])  -- getD provides a default value
+  )
 -- #eval (HfmnTree.encodedList eg₁)
 --   [('a', [false]),
 --   ('b', [true, false, true]),
