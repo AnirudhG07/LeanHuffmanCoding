@@ -9,17 +9,17 @@ abbrev BoolEncList (α : Type) := List (α × BoolList)
 abbrev TypeEncodedList (α : Type) := List (α × String)
 
 -- This is made so that I can use for any type of data which is HuffmanType, etc. like Char, Int, etc.
-class HfmnType (α : Type) where
+class HfmnType (α : Type) [DecidableEq α]  where
   default : α
-  decEq : DecidableEq α 
-  inhabited : Inhabited α := ⟨default⟩
+
+variable {α : Type} [DecidableEq α] [Inhabited α] [Ord α] [HfmnType α]
 
 def eg₁ : AlphaNumList Char := [('a', 45),('b', 13),('c', 12),('d', 16),('e', 9),('f', 5)]
 
 def conv_enc_boollist (s : String) : BoolList :=
   s.toList.map (λ c => if c = '1' then true else false)
 
-def conv_str_freq_boollist {α : Type} (s : TypeEncodedList α) : List (α × BoolList) :=
+def conv_str_freq_boollist (s : TypeEncodedList α) : List (α × BoolList) :=
   s.map (λ (c, str) => (c, conv_enc_boollist str))
 
 -- Huffman Tree Definition
@@ -46,19 +46,19 @@ theorem vals_at_leaves {α : Type} (tree : HfmnTree α) :
     rw [h_tree, h_leaf]
 
 
-def HfmnTree.weight {α : Type} : HfmnTree α → Nat
+def HfmnTree.weight : HfmnTree α → Nat
   | Leaf _ w _ => w
   | Node l r => l.weight + r.weight
 
 -- Comparison function for Huffman trees weights
-def HfmnTree.compare {α : Type} (s s' : HfmnTree α) : Ordering :=
+def HfmnTree.compare (s s' : HfmnTree α) : Ordering :=
   Ord.compare s.weight s'.weight
 
-instance {α : Type} : Ord (HfmnTree α) where
+instance : Ord (HfmnTree α) where
   compare := HfmnTree.compare
 
 -- Insert an element in a way that does not break the order of the sorted list.
-def orderedInsert {α : Type} [Ord α] (a : α) : List α → List α
+def orderedInsert (a : α) : List α → List α
   | [] => [a]
   | b :: l =>
     match compare a b with
@@ -82,7 +82,7 @@ theorem orderedInsert_inc_length {α : Type} [Ord α] (a : α) (l : List α) :
     split <;> simp [ih]
     
 -- insertion sort 
-def insertionSort {α : Type} [Ord α] : List α → List α
+def insertionSort : List α → List α
   | [] => []
   | b :: l => orderedInsert b (insertionSort l)
 
@@ -105,7 +105,7 @@ theorem insertionSort_preserves_length {α : Type} [Ord α] :
 def String.freq(s : String) (c : Char) := s.data.filter (· == c) |>.length
 -- #eval "hello".freq 'l' --2
 
-def mergeTrees {α : Type} (t1 t2 : HfmnTree α) : HfmnTree α :=
+def mergeTrees (t1 t2 : HfmnTree α) : HfmnTree α :=
   -- If t1 t2 is either Leaf or Node, when merged, it will be a Node
   HfmnTree.Node t1 t2 
 
@@ -121,7 +121,7 @@ theorem sorted_nonempty_is_nonempty {α : Type} (trees : List (HfmnTree α)) (h 
   simp [List.ne_nil_of_length_pos, h₂]
 
 
-def HfmnTree.merge {α : Type}(trees: List (HfmnTree α)) (h: trees ≠ []) : HfmnTree α :=
+def HfmnTree.merge (trees: List (HfmnTree α)) (h: trees ≠ []) : HfmnTree α :=
   let sorted := insertionSort trees
   have hp: sorted ≠ [] := by
     apply sorted_nonempty_is_nonempty
@@ -141,25 +141,23 @@ termination_by trees.length
 
 def eg : BoolList := [true, false, true, false]
 
-def depthAux {α : Type} [HfmnType α] (tree: HfmnTree α) (c: α) (d: Int) : Int :=
-  let _ := @HfmnType.decEq α _
+def depthAux (tree: HfmnTree α) (c: α) (d: Int) : Int :=
   match tree with
   | HfmnTree.Leaf c' _ _ =>
-    -- Lean now knows equality is decidable via HuffmanType.decEq
+    -- The decidability of equality has been invoked previously for the type α
     if c = c' then d else -1
   | HfmnTree.Node l r =>
     let leftDepth := depthAux l c (d + 1)
     if leftDepth != -1 then leftDepth else depthAux r c (d + 1)
 
 -- Returns the depth of a character in the Huffman tree, if not found returns -1
-def HfmnTree.findDepth {α : Type} [HfmnType α] (tree: HfmnTree α) (c: α) : Int :=
+def HfmnTree.findDepth (tree: HfmnTree α) (c: α) : Int :=
   -- Helper function to calculate the depth of a character in the tree
   depthAux tree c 0 
 
 -- Encode a character in a Huffman tree
-def HfmnTree.encodeWithDepth {α : Type} [HfmnType α] (c : α) : HfmnTree α → Option (BoolList × Nat)
+def HfmnTree.encodeWithDepth (c : α) : HfmnTree α → Option (BoolList × Nat)
   | .Leaf c' _ _ => 
-    let _ := @HfmnType.decEq α _
     if c = c' then some ([], 0) else none
   | Node l r =>
     -- Has an underlying assumption, every digit increase in code, depth +=1 too, which is proved in the next theorem
@@ -168,14 +166,14 @@ def HfmnTree.encodeWithDepth {α : Type} [HfmnType α] (c : α) : HfmnTree α �
     | some (s, d), none => some ([false] ++ s, d + 1)
     | _, _ => none
 
-def HfmnTree.encode {α: Type} [HfmnType α] (c : α) (t : HfmnTree α) : Option BoolList :=
+def HfmnTree.encode (c : α) (t : HfmnTree α) : Option BoolList :=
   (t.encodeWithDepth c).map (·.1)
 
-def HfmnTree.depth { α: Type} (c : α) [HfmnType α] (t : HfmnTree α) : Option Nat :=
+def HfmnTree.depth (c : α) (t : HfmnTree α) : Option Nat :=
   (t.encodeWithDepth c).map (·.2)
 
 -- Theorem: Depth is equal to the length of the code
-theorem HfmnTree.depth_is_length_enc {α : Type} [HfmnType α] (c: α) (t: HfmnTree α) (code : BoolList) :
+theorem HfmnTree.depth_is_length_enc {α : Type} [DecidableEq α] (c: α) (t: HfmnTree α) (code : BoolList) :
   t.encode c = code → t.depth c = code.length := by
     cases t
     case Leaf c' w cc =>
@@ -210,7 +208,7 @@ theorem HfmnTree.depth_is_length_enc {α : Type} [HfmnType α] (c: α) (t: HfmnT
 -- #eval depthAux (HfmnTree.Leaf 'a' 1) 'a' 0 -- 0
 -- #eval depthAux (HfmnTree.Node (HfmnTree.Leaf 'a' 1) (HfmnTree.Leaf 'b' 2) 3) 'a' 0
 
-theorem HfmnTree.find_depth_is_length_enc {α: Type} (c: α) [HfmnType α] (t: HfmnTree α) (code : BoolList) :
+theorem HfmnTree.find_depth_is_length_enc {α : Type} (c: α) [DecidableEq α] (t: HfmnTree α) (code : BoolList) :
   t.encode c = code → t.findDepth c = code.length := by
     cases t
     case Leaf c' w cc =>
@@ -258,7 +256,7 @@ deriving Inhabited, Repr
 
 abbrev AlphaNumTree (α : Type) := List (Alphabet α)
 
-def convert_input_to_alphabet {α : Type} (input : AlphaNumList α) : AlphaNumTree α := input.map fun a => Alphabet.mk a.1 a.2
+def convert_input_to_alphabet (input : AlphaNumList α) : AlphaNumTree α := input.map fun a => Alphabet.mk a.1 a.2
 
 theorem cita_ne_to_ne {α : Type} (s : AlphaNumList α) (h : s ≠ []) :
   convert_input_to_alphabet s ≠ [] := by
@@ -275,7 +273,7 @@ theorem cita_ne_to_ne {α : Type} (s : AlphaNumList α) (h : s ≠ []) :
   exact Nat.lt_irrefl 0 h₃
 
 -- Returns the Binary Tree of the Huffman encoding, without the encoded strings
-def HfmnTree.tree {α : Type} [HfmnType α] (huffinput : AlphaNumList α) : HfmnTree α :=
+def HfmnTree.tree (huffinput : AlphaNumList α) : HfmnTree α :=
   if p:huffinput.isEmpty then -- Handle []
     HfmnTree.Leaf HfmnType.default 0
   else
@@ -309,7 +307,7 @@ def HfmnTree.tree {α : Type} [HfmnType α] (huffinput : AlphaNumList α) : Hfmn
     HfmnTree.merge sorted (by simp [sorted_nonempty] )
 
 -- Encode a string in a Huffman tree
-def HfmnTree.encodedList {α : Type} [HfmnType α] (huffinput : AlphaNumList α) : BoolEncList α :=
+def HfmnTree.encodedList (huffinput : AlphaNumList α) : BoolEncList α :=
   let tree := HfmnTree.tree huffinput
   let input := convert_input_to_alphabet huffinput
   input.map (fun a => 
@@ -324,8 +322,7 @@ def HfmnTree.encodedList {α : Type} [HfmnType α] (huffinput : AlphaNumList α)
 --   ('e', [true, true, false, true]),
 --   ('f', [true, true, false, false])]
 
-def Huffmann.leastEncodedData {α : Type} [HfmnType α] (huffinput : AlphaNumList α) : Nat :=
-  let _ := @HfmnType.decEq α _
+def Huffmann.leastEncodedData (huffinput : AlphaNumList α) : Nat :=
   let encoded := HfmnTree.encodedList huffinput
   huffinput.foldl (fun acc (a, count) => 
     match encoded.find? (fun (x, _) => x == a) with
@@ -338,7 +335,7 @@ def Huffmann.leastEncodedData {α : Type} [HfmnType α] (huffinput : AlphaNumLis
 -- #eval HfmnTree.manual_depth (HfmnTree.tree eg₁ ) 'a' -- 1
 
 -- Valid path function, considers a path to the leaf as valid, path to Node as invalid
-def HfmnTree.valid_leaf_or_node {α : Type}(bl: BoolList) (tree: HfmnTree α) : Bool :=
+def HfmnTree.valid_leaf_or_node (bl: BoolList) (tree: HfmnTree α) : Bool :=
   match tree with
   | HfmnTree.Leaf _ _ _ => bl.isEmpty
   | Node l r =>
@@ -351,34 +348,32 @@ def HfmnTree.valid_leaf_or_node {α : Type}(bl: BoolList) (tree: HfmnTree α) : 
 -- #eval HfmnTree.valid_path_of_tree [true, false, true] (HfmnTree.tree eg₁) -- true
 
 -- chars returns the set of characters in the tree
-def HfmnTree.chars {α : Type } : HfmnTree α → List α
+def HfmnTree.chars: HfmnTree α → List α
   | Leaf c _ _ => [c]
   | Node l r => l.chars ++ r.chars
 
 -- Helper list intersection function
-def List.inter {α : Type} [HfmnType α](l₁ l₂ : List α) : List α :=
-  let _ := @HfmnType.decEq α _
+def List.inter(l₁ l₂ : List α) : List α :=
   l₁.filter (· ∈ l₂)
 
-def HfmnTree.charInTree {α : Type} [HfmnType α] (t : HfmnTree α) (c : α) : Bool :=
-  let _ := @HfmnType.decEq α _
+def HfmnTree.charInTree (t : HfmnTree α) (c : α) : Bool :=
   t.chars.contains c
 
-def disjointChars {α : Type} [HfmnType α](t : HfmnTree α) : Prop :=
+def disjointChars (t : HfmnTree α) : Prop :=
   match t with 
   | HfmnTree.Leaf _ _ _ => True
   | HfmnTree.Node l r =>
     [] = l.chars.inter r.chars
 
 -- Theorem: Merge of two trees with disjoint characters is disjoint
-theorem merge_preserves_disjoint_chars {α : Type} [HfmnType α] (l r : HfmnTree α) :
+theorem merge_preserves_disjoint_chars {α : Type} [DecidableEq α] (l r : HfmnTree α) :
   disjointChars l → disjointChars r → l.chars.inter r.chars = [] → disjointChars (mergeTrees l r) := by
   intro h₁ h₂ h₃
   simp [mergeTrees, disjointChars] 
   assumption
 
 -- the characters in any left and right tree are disjoint
-theorem left_right_tree_disjoint_chars {α : Type} [HfmnType α] (huffinput: AlphaNumList α) :
+theorem left_right_tree_disjoint_chars {α : Type} [DecidableEq α] [HfmnType α](huffinput: AlphaNumList α) :
   disjointChars (HfmnTree.tree huffinput) := by
   induction huffinput with
   | nil => 
@@ -399,11 +394,11 @@ def checkPrefixfree (bl₁ bl₂: BoolList) : Bool :=
 -- #eval checkPrefixfree [true, false, false] [true, false] -- false
 
 -- Check if the encoded list is prefix free, i.e. compares each encoded string with all other strings
-def isPrefixfree {α : Type} : BoolEncList α → Bool
+def isPrefixfree : BoolEncList α → Bool
   | [] => true
   | (_, bl) :: rest => rest.all (fun al => checkPrefixfree bl al.2) && isPrefixfree rest
 
-def prefixFreeTree {α : Type} [HfmnType α] (huffinput : AlphaNumList α) : Prop :=
+def prefixFreeTree (huffinput : AlphaNumList α) : Prop :=
   let enc_list := HfmnTree.encodedList huffinput
   isPrefixfree enc_list
 
@@ -411,7 +406,7 @@ def prefixFreeTree {α : Type} [HfmnType α] (huffinput : AlphaNumList α) : Pro
 
 -- #eval isPrefixfree (conv_str_freq_boollist [('a', "0"),('b', "101"),('c', "100"),('d', "011"),('e', "1101"),('f', "1100")]) -- false
 
-def HfmnTree.decode {α : Type} (enc_boolinput : BoolList) (enc_huffinput : List (α × BoolList)) : Option α :=
+def HfmnTree.decode (enc_boolinput : BoolList) (enc_huffinput : List (α × BoolList)) : Option α :=
   enc_huffinput.find? (λ (_, s) => s = enc_boolinput) |>.map (·.1)
 
 -- #eval HfmnTree.decode "1" ( HfmnTree.encoded_tree eg₁ ).1 -- none
