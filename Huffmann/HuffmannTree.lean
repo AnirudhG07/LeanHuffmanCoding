@@ -3,6 +3,8 @@
 We will initially define the binary treee for encoding and get the minimum encoded data for the list of input data.
 -/
 
+set_option linter.unusedSectionVars false
+
 abbrev BoolList := List Bool
 abbrev AlphaNumList (α : Type) := List (α × Nat)
 abbrev BoolEncList (α : Type) := List (α × BoolList)
@@ -29,7 +31,7 @@ inductive HfmnTree (α : Type) where
 deriving Inhabited, Repr
 
 -- Theorem: Values in a Huffman tree only appear at leaves
-theorem vals_at_leaves {α : Type} (tree : HfmnTree α) :
+theorem vals_at_leaves (tree : HfmnTree α) :
   ∀ (x : α), (∃ (w : Nat) (code : BoolList), tree = HfmnTree.Leaf x w code) ↔ 
              (∃ (leaf : HfmnTree α), (∃ (w : Nat) (code : BoolList), leaf = HfmnTree.Leaf x w code) ∧ tree = leaf) := by
   intro x
@@ -109,7 +111,7 @@ def mergeTrees (t1 t2 : HfmnTree α) : HfmnTree α :=
   -- If t1 t2 is either Leaf or Node, when merged, it will be a Node
   HfmnTree.Node t1 t2 
 
-theorem sorted_nonempty_is_nonempty {α : Type} (trees : List (HfmnTree α)) (h : trees ≠ []) :
+theorem sorted_nonempty_is_nonempty (trees : List (HfmnTree α)) (h : trees ≠ []) :
   insertionSort trees ≠ [] := by
   have h₁ : (insertionSort trees).length = trees.length := by
     apply insertionSort_preserves_length
@@ -173,7 +175,7 @@ def HfmnTree.depth (c : α) (t : HfmnTree α) : Option Nat :=
   (t.encodeWithDepth c).map (·.2)
 
 -- Theorem: Depth is equal to the length of the code
-theorem HfmnTree.depth_is_length_enc {α : Type} [DecidableEq α] (c: α) (t: HfmnTree α) (code : BoolList) :
+theorem HfmnTree.depth_is_length_enc (c: α) (t: HfmnTree α) (code : BoolList) :
   t.encode c = code → t.depth c = code.length := by
     cases t
     case Leaf c' w cc =>
@@ -208,7 +210,7 @@ theorem HfmnTree.depth_is_length_enc {α : Type} [DecidableEq α] (c: α) (t: Hf
 -- #eval depthAux (HfmnTree.Leaf 'a' 1) 'a' 0 -- 0
 -- #eval depthAux (HfmnTree.Node (HfmnTree.Leaf 'a' 1) (HfmnTree.Leaf 'b' 2) 3) 'a' 0
 
-theorem HfmnTree.find_depth_is_length_enc {α : Type} (c: α) [DecidableEq α] (t: HfmnTree α) (code : BoolList) :
+theorem HfmnTree.find_depth_is_length_enc (c: α) (t: HfmnTree α) (code : BoolList) :
   t.encode c = code → t.findDepth c = code.length := by
     cases t
     case Leaf c' w cc =>
@@ -258,7 +260,7 @@ abbrev AlphaNumTree (α : Type) := List (Alphabet α)
 
 def convert_input_to_alphabet (input : AlphaNumList α) : AlphaNumTree α := input.map fun a => Alphabet.mk a.1 a.2
 
-theorem cita_ne_to_ne {α : Type} (s : AlphaNumList α) (h : s ≠ []) :
+theorem cita_ne_to_ne (s : AlphaNumList α) (h : s ≠ []) :
   convert_input_to_alphabet s ≠ [] := by
   intro hi
   have h₁ : (convert_input_to_alphabet s).length = s.length := by
@@ -373,7 +375,7 @@ theorem merge_preserves_disjoint_chars {α : Type} [DecidableEq α] (l r : HfmnT
   assumption
 
 -- the characters in any left and right tree are disjoint
-theorem left_right_tree_disjoint_chars {α : Type} [DecidableEq α] [HfmnType α](huffinput: AlphaNumList α) :
+theorem left_right_tree_disjoint_chars (huffinput: AlphaNumList α) :
   disjointChars (HfmnTree.tree huffinput) := by
   induction huffinput with
   | nil => 
