@@ -110,10 +110,12 @@ theorem insertionSort_preserves_length {α : Type} [Ord α] :
 def String.freq(s : String) (c : Char) := s.data.filter (· == c) |>.length
 -- #eval "hello".freq 'l' --2
 
+@[simp]
 def mergeTrees (t1 t2 : HfmnTree α) : HfmnTree α :=
   -- If t1 t2 is either Leaf or Node, when merged, it will be a Node
   HfmnTree.Node t1 t2 
 
+@[simp]
 theorem sorted_nonempty_is_nonempty (trees : List (HfmnTree α)) (h : trees ≠ []) :
   insertionSort trees ≠ [] := by
   have h₁ : (insertionSort trees).length = trees.length := by
@@ -126,6 +128,7 @@ theorem sorted_nonempty_is_nonempty (trees : List (HfmnTree α)) (h : trees ≠ 
   simp [List.ne_nil_of_length_pos, h₂]
 
 
+@[simp]
 def HfmnTree.merge (trees: List (HfmnTree α)) (h: trees ≠ []) : HfmnTree α :=
   let sorted := insertionSort trees
   have hp: sorted ≠ [] := by
@@ -161,6 +164,7 @@ def HfmnTree.findDepth (tree: HfmnTree α) (c: α) : Int :=
   depthAux tree c 0 
 
 -- Encode a character in a Huffman tree
+@[simp]
 def HfmnTree.encodeWithDepth (c : α) : HfmnTree α → Option (BoolList × Nat)
   | .Leaf c' _ code => 
     if c = c' then some (code, code.length) else none
@@ -239,7 +243,8 @@ theorem cita_ne_to_ne (s : AlphaNumList α) (h : s ≠ []) :
   rw [h₂] at h₃
   exact Nat.lt_irrefl 0 h₃
 
-def addCode (tree : HfmnTree α) (code : BoolList) : HfmnTree α :=
+@[simp]
+def HfmnTree.addCode (tree : HfmnTree α) (code : BoolList) : HfmnTree α :=
   match tree with
   | HfmnTree.Leaf c w _ => HfmnTree.Leaf c w code
   | HfmnTree.Node l r _ =>
@@ -311,14 +316,53 @@ def Vertex.code : Vertex → BoolList
   | Node c => c
   | Leaf c => c
 
+@[simp]
 def HfmnTree.vertices : HfmnTree α → List Vertex
   | HfmnTree.Leaf _ _ code => [Vertex.Leaf code]
   | HfmnTree.Node l r code => Vertex.Node code :: (vertices l ++ vertices r)
 
+theorem HfmnTree.vertices_nonempty (t : HfmnTree α) :
+  t.vertices ≠ [] := by
+  induction t with
+  | Leaf c w code =>
+    simp [vertices]
+  | Node l r code =>
+    simp [vertices]
+ 
+-- #eval HfmnTree.vertices (HfmnTree.tree eg₁)
+
 theorem HfmnTree.all_codes_unique (t : HfmnTree α) : 
     (t.vertices).Pairwise (fun v₁ v₂ => Vertex.code v₁ ≠ Vertex.code v₂) := by
-  sorry
+  induction t with
+  | Leaf c w code =>
+    simp [vertices]
+  | Node l r code =>
+    simp [vertices]
 
+    have h₁ : (l.vertices).Pairwise (fun v₁ v₂ => Vertex.code v₁ ≠ Vertex.code v₂) := by
+      assumption
+    have h₂ : (r.vertices).Pairwise (fun v₁ v₂ => Vertex.code v₁ ≠ Vertex.code v₂) := by
+      assumption
+    constructor
+
+    case left =>
+      intro v hl hr
+      cases hl with
+      | inl hl =>
+        have h': Vertex.code v ∈ l.vertices.map Vertex.code := by
+          simp [List.mem_map]; exact ⟨v, hl, rfl⟩
+        simp [List.mem_map] at h'
+         
+        sorry
+      | inr hr' =>
+        have h': Vertex.code v ∈ r.vertices.map Vertex.code := by
+          simp [List.mem_map]; exact ⟨v, hr', rfl⟩
+        simp [List.mem_map] at h' 
+        sorry
+
+    case right =>
+      sorry
+    
 -- chars returns the set of characters in the tree
 def HfmnTree.chars: HfmnTree α → List α
   | Leaf c _ _ => [c]
