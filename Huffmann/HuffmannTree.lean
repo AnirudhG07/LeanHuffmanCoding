@@ -338,11 +338,7 @@ theorem HfmnTree.all_codes_unique (t : HfmnTree α) :
     simp [vertices]
   | Node l r code =>
     simp [vertices]
-
-    have h₁ : (l.vertices).Pairwise (fun v₁ v₂ => Vertex.code v₁ ≠ Vertex.code v₂) := by
-      assumption
-    have h₂ : (r.vertices).Pairwise (fun v₁ v₂ => Vertex.code v₁ ≠ Vertex.code v₂) := by
-      assumption
+    rename_i ihl ihr
     constructor
 
     case left =>
@@ -421,6 +417,35 @@ def prefixFreeTree (huffinput : AlphaNumList α) : Prop :=
 -- #eval isPrefixfree (HfmnTree.encoded_tree eg₁).1 -- true
 
 -- #eval isPrefixfree (conv_str_freq_boollist [('a', "0"),('b', "101"),('c', "100"),('d', "011"),('e', "1101"),('f', "1100")]) -- false
+
+
+theorem HfmnTree.hfmntree_is_prefix_free (t : HfmnTree α) :
+  t.vertices.Pairwise (fun v₁ v₂ => v₁ ≠ v₂ → checkPrefixfree v₁.code v₂.code) := by
+  induction t with
+  | Leaf c w code =>
+    simp [vertices]
+  | Node l r code =>
+    simp [vertices]
+    rename_i ihl ihr
+    constructor
+
+    case left =>
+      intro v hl hr
+      cases hl with
+      | inl hl =>
+        have h': Vertex.code v ∈ l.vertices.map Vertex.code := by
+          simp [List.mem_map]; exact ⟨v, hl, rfl⟩
+        simp [List.mem_map] at h'
+        sorry
+      | inr hr' =>
+        have h': Vertex.code v ∈ r.vertices.map Vertex.code := by
+          simp [List.mem_map]; exact ⟨v, hr', rfl⟩
+        simp [List.mem_map] at h' 
+        sorry
+
+    case right =>
+      sorry
+
 
 def HfmnTree.decode (enc_boolinput : BoolList) (enc_huffinput : List (α × BoolList)) : Option α :=
   enc_huffinput.find? (λ (_, s) => s = enc_boolinput) |>.map (·.1)
