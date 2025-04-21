@@ -1,6 +1,14 @@
 /-
-# This contains the definition of a huffmann tree, a binary tree used to encode data.
-We will initially define the binary treee for encoding and get the minimum encoded data for the list of input data.
+Huffmann Trees are trees used for data compression. They are binary trees where each leaf node represents a character and its frequency in the input data. The tree is constructed in such a way that characters with higher frequencies are closer to the root, allowing for shorter binary representations.
+
+Some of the properties of Huffmann trees are:
+* The values in a Huffmann tree only appear at leaves.
+* The depth of a character in the tree is equal to the length of its binary representation.
+* The characters in the left and right subtrees of a node are disjoint.
+* Huffman trees are prefix-free, meaning no code is a prefix of another code.
+* The algorithm is Optimal for the given set of characters and their frequencies.
+
+We implements the Huffmann tree construction algorithm, and prove its correctness.
 -/
 
 set_option linter.unusedSectionVars false
@@ -10,7 +18,9 @@ abbrev AlphaNumList (α : Type) := List (α × Nat)
 abbrev BoolEncList (α : Type) := List (α × BoolList)
 abbrev TypeEncodedList (α : Type) := List (α × String)
 
--- This is made so that I can use for any type of data which is HuffmanType, etc. like Char, Int, etc.
+/- 
+Defined a Typeclass for the type of the inputs in the Huffmann tree. Since decoding would be primarlity on strings or integer inputs, they are all decidable, ordered and inhabited.
+-/
 class HfmnType (α : Type) [DecidableEq α]  where
   default : α
 
@@ -21,48 +31,39 @@ instance [Inhabited α] [DecidableEq α] : HfmnType α where
 
 def eg₁ : AlphaNumList Char := [('a', 45),('b', 13),('c', 12),('d', 16),('e', 9),('f', 5)]
 
+/-Converts a String input to a Boolean List -/
 def conv_enc_boollist (s : String) : BoolList :=
   s.toList.map (λ c => if c = '1' then true else false)
 
+/- Converts a list of inputs and their frequencies to a list of (inputs x encoded BoolList).-/
 def conv_str_freq_boollist (s : TypeEncodedList α) : List (α × BoolList) :=
-  s.map (λ (c, str) => (c, conv_enc_boollist str))
+  s.map (λ (c, val) => (c, conv_enc_boollist val))
 
--- Huffman Tree Definition
+/-
+The HfmnTree is a binary tree where each node can be either a leaf or an internal node.
+An inductive type is used to represent the tree structure, where a Node has a left and right Huffman Trees while Lead just has the values and weights. Both contain the BoolList uptill that vertex.
+-/
 inductive HfmnTree (α : Type) where
   | Node (left : HfmnTree α) (right : HfmnTree α) (code : BoolList := [])
   | Leaf (val : α) (weight : Nat) (code : BoolList := [])
 deriving Inhabited, Repr
 
--- Theorem: Values in a Huffman tree only appear at leaves
-theorem vals_at_leaves (tree : HfmnTree α) :
-  ∀ (x : α), (∃ (w : Nat) (code : BoolList), tree = HfmnTree.Leaf x w code) ↔ 
-             (∃ (leaf : HfmnTree α), (∃ (w : Nat) (code : BoolList), leaf = HfmnTree.Leaf x w code) ∧ tree = leaf) := by
-  intro x
-  constructor
-  -- Forward: If x appears in tree, it must be in a Leaf
-  · intro h
-    rcases h with ⟨w, code, h_eq⟩
-    exists HfmnTree.Leaf x w code
-    simp [h_eq]
-  -- Backward: If some Leaf equals tree and holds x, then x is in tree
-  · intro h
-    rcases h with ⟨leaf, ⟨w, code, h_leaf⟩, h_tree⟩
-    exists w, code
-    rw [h_tree, h_leaf]
-
-
 def HfmnTree.weight : HfmnTree α → Nat
   | Leaf _ w _ => w
   | Node l r _ => l.weight + r.weight
 
--- Comparison function for Huffman trees weights
+/-
+Comparison function for Huffman trees weights
+-/
 def HfmnTree.compare (s s' : HfmnTree α) : Ordering :=
   Ord.compare s.weight s'.weight
 
 instance : Ord (HfmnTree α) where
   compare := HfmnTree.compare
 
--- Insert an element in a way that does not break the order of the sorted list.
+/-
+The orderedInsert function inserts an element into a sorted list while maintaining the order.
+-/
 def orderedInsert (a : α) : List α → List α
   | [] => [a]
   | b :: l =>
@@ -70,6 +71,7 @@ def orderedInsert (a : α) : List α → List α
     | .lt => a :: b :: l
     | _ => b :: orderedInsert a l
 
+/- Theorem: The orderedInsert function maintains the order of the list. -/
 theorem orderedInsert_nonempty {α : Type} [Ord α] (a : α) (l : List α) :
   (orderedInsert a l).length > 0 := by
   induction l with
@@ -78,6 +80,7 @@ theorem orderedInsert_nonempty {α : Type} [Ord α] (a : α) (l : List α) :
     simp [orderedInsert]
     split <;> simp [List.length, ih, Nat.zero_lt_succ]
     
+/- Theorem: The length of the list after inserting an element is equal to the original length plus one.-/
 theorem orderedInsert_inc_length {α : Type} [Ord α] (a : α) (l : List α) :
   (orderedInsert a l).length = l.length + 1 := by
   induction l with
@@ -86,13 +89,14 @@ theorem orderedInsert_inc_length {α : Type} [Ord α] (a : α) (l : List α) :
     simp [orderedInsert]
     split <;> simp [ih]
     
--- insertion sort 
+/- Insertion sort function that sorts a list of elements so that the elements are in non-decreasing order.-/
 def insertionSort : List α → List α
   | [] => []
   | b :: l => orderedInsert b (insertionSort l)
 
 -- #check insertionSort
 
+/- Theorem: The insertionSort function preserves the length of the list. -/
 theorem insertionSort_preserves_length {α : Type} [Ord α] :
   ∀ l : List α, (insertionSort l).length = l.length := by
   intro l
@@ -105,16 +109,7 @@ theorem insertionSort_preserves_length {α : Type} [Ord α] :
     simp [List.length_cons]
     assumption
 
--- def HfmnTree.sort (trees : List HfmnTree) : List HfmnTree := insertionSort trees
-
-def String.freq(s : String) (c : Char) := s.data.filter (· == c) |>.length
--- #eval "hello".freq 'l' --2
-
-@[simp]
-def mergeTrees (t1 t2 : HfmnTree α) : HfmnTree α :=
-  -- If t1 t2 is either Leaf or Node, when merged, it will be a Node
-  HfmnTree.Node t1 t2 
-
+/- Theorem: The insertionSorted non-empty list is non-empty -/
 @[simp]
 theorem sorted_nonempty_is_nonempty (trees : List (HfmnTree α)) (h : trees ≠ []) :
   insertionSort trees ≠ [] := by
@@ -128,6 +123,19 @@ theorem sorted_nonempty_is_nonempty (trees : List (HfmnTree α)) (h : trees ≠ 
   simp [List.ne_nil_of_length_pos, h₂]
 
 
+def String.freq(s : String) (c : Char) := s.data.filter (· == c) |>.length
+-- #eval "hello".freq 'l' --2
+
+/-
+If t1 t2 is either Leaf or Node, when merged, it will be a Node.
+-/
+@[simp]
+def mergeTrees (t1 t2 : HfmnTree α) : HfmnTree α :=
+  HfmnTree.Node t1 t2 
+
+/-
+In our algorithm, we take the mininum two trees and merge them. The merged tree is then inserted back into the list of trees.
+-/
 @[simp]
 def HfmnTree.merge (trees: List (HfmnTree α)) (h: trees ≠ []) : HfmnTree α :=
   let sorted := insertionSort trees
@@ -158,12 +166,16 @@ def depthAux (tree: HfmnTree α) (c: α) (d: Int) : Int :=
     let leftDepth := depthAux l c (d + 1)
     if leftDepth != -1 then leftDepth else depthAux r c (d + 1)
 
--- Returns the depth of a character in the Huffman tree, if not found returns -1
+/-
+Returns the depth of a character in the Huffman tree, if not found returns -1
+-/
 def HfmnTree.findDepth (tree: HfmnTree α) (c: α) : Int :=
   -- Helper function to calculate the depth of a character in the tree
   depthAux tree c 0 
 
--- Encode a character in a Huffman tree
+/-
+Encodes the input value in a Huffman tree. It takes the value and its tree. it traverses the tree to construct the BoolList. Note that everytime is you add a bit(bool here), the depth is increased by 1.
+-/
 @[simp]
 def HfmnTree.encodeWithDepth (c : α) : HfmnTree α → Option (BoolList × Nat)
   | .Leaf c' _ code => 
@@ -180,7 +192,9 @@ def HfmnTree.encode (c : α) (t : HfmnTree α) : Option BoolList :=
 def HfmnTree.depth (c : α) (t : HfmnTree α) : Option Nat :=
   (t.encodeWithDepth c).map (·.2)
 
--- Theorem: Depth is equal to the length of the code
+/-
+Theorem: Depth is equal to the length of the code
+-/
 theorem HfmnTree.depth_is_length_enc (c: α) (t: HfmnTree α) (code : BoolList) :
   t.encode c = code → t.depth c = code.length := by
     cases t
@@ -197,10 +211,20 @@ theorem HfmnTree.depth_is_length_enc (c: α) (t: HfmnTree α) (code : BoolList) 
         | ch :: ct =>
           let ihr := HfmnTree.depth_is_length_enc c r ct
           simp [encode, depth, encodeWithDepth, p, p'] at ihr
-          simp at h
+           
           sorry
         | code =>
-          sorry
+          rename_i bl br
+          match bl with
+          | [] => 
+            simp [encode, depth, encodeWithDepth, p, p']
+            have : (code ++ [true]).length > 0 := by
+              simp [List.length, List.length_pos_iff] 
+            sorry
+          | rest =>
+
+            sorry
+
       | some (s, d), none =>
         simp [encode, depth, encodeWithDepth, p, p']
         intro h
@@ -220,8 +244,11 @@ theorem HfmnTree.depth_is_length_enc (c: α) (t: HfmnTree α) (code : BoolList) 
 -- #eval depthAux (HfmnTree.Leaf 'a' 1) 'a' 0 -- 0
 -- #eval depthAux (HfmnTree.Node (HfmnTree.Leaf 'a' 1) (HfmnTree.Leaf 'b' 2) 3) 'a' 0
 
+/-
+The Alphabet structure is used to represent the values and their frequencies in the input data. It contains a value of type α and a frequency of type Nat.
+-/
 structure Alphabet (α : Type) where
-  char : α
+  val : α
   freq : Nat
 deriving Inhabited, Repr
 
@@ -229,6 +256,9 @@ abbrev AlphaNumTree (α : Type) := List (Alphabet α)
 
 def convert_input_to_alphabet (input : AlphaNumList α) : AlphaNumTree α := input.map fun a => Alphabet.mk a.1 a.2
 
+/-
+Theorem: The conversion function `convert_input_to_alphabet` for a non-empty list is non-empty.
+-/
 theorem cita_ne_to_ne (s : AlphaNumList α) (h : s ≠ []) :
   convert_input_to_alphabet s ≠ [] := by
   intro hi
@@ -243,6 +273,9 @@ theorem cita_ne_to_ne (s : AlphaNumList α) (h : s ≠ []) :
   rw [h₂] at h₃
   exact Nat.lt_irrefl 0 h₃
 
+/-
+The addCode function adds a Booleans to Leaf and Node of the Huffman tree. It does this after the tree has been constructed. The code is added to the left(false) and right(true) branches of the tree.
+-/
 @[simp]
 def HfmnTree.addCode (tree : HfmnTree α) (code : BoolList) : HfmnTree α :=
   match tree with
@@ -252,7 +285,9 @@ def HfmnTree.addCode (tree : HfmnTree α) (code : BoolList) : HfmnTree α :=
     let newRight := addCode r (code ++ [true])
     HfmnTree.Node newLeft newRight code
 
--- Returns the Binary Tree of the Huffman encoding, without the encoded strings
+/-
+The main Tree creator function which takes the input and returns the Huffman tree, with the encoded BoolList included.
+-/
 def HfmnTree.tree (huffinput : AlphaNumList α) : HfmnTree α :=
   if p:huffinput.isEmpty then -- Handle []
     HfmnTree.Leaf HfmnType.default 0
@@ -264,7 +299,7 @@ def HfmnTree.tree (huffinput : AlphaNumList α) : HfmnTree α :=
       apply cita_ne_to_ne
       exact huffinput_nonempty 
 
-    let leaves : List (HfmnTree α) := input.map (fun a => HfmnTree.Leaf a.char a.freq)
+    let leaves : List (HfmnTree α) := input.map (fun a => HfmnTree.Leaf a.val a.freq)
     have hl : leaves ≠ [] := by
       intro h
       have h₁ : (leaves).length = (input).length := by
@@ -291,14 +326,18 @@ def HfmnTree.tree (huffinput : AlphaNumList α) : HfmnTree α :=
 
 -- #eval HfmnTree.tree eg₁
 
--- Encode a string in a Huffman tree
+/-
+Extracts the encoded BoolList from a Huffman tree.
+-/
 def HfmnTree.encodedList (huffinput : AlphaNumList α) : BoolEncList α :=
-  let tree := HfmnTree.tree huffinput
-  let input := convert_input_to_alphabet huffinput
-  input.map (fun a => 
-    let encoding := tree.encode a.char
-    (a.char, encoding.getD [])  -- getD provides a default value
-  )
+  let rec encodeAux (t : HfmnTree α) : BoolEncList α :=
+    match t with 
+    | HfmnTree.Leaf c _ code =>
+      [(c, code)]
+    | HfmnTree.Node l r _ =>
+      encodeAux l ++ encodeAux r
+  encodeAux (HfmnTree.tree huffinput)
+
 -- #eval HfmnTree.encodedList eg₁
 --   [('a', [false]),
 --   ('b', [true, false, true]),
@@ -307,6 +346,25 @@ def HfmnTree.encodedList (huffinput : AlphaNumList α) : BoolEncList α :=
 --   ('e', [true, true, false, true]),
 --   ('f', [true, true, false, false])]
 
+/-
+The leastEncodedData function calculates the total number of bits used to encode the input data using the Huffman tree. It multiplies the length of each code by its frequency and sums them up.
+-/
+def Huffmann.leastEncodedData (huffinput : AlphaNumList α) : Nat :=
+  let encoded := HfmnTree.encodedList huffinput
+  huffinput.foldl (fun acc (a, count) => 
+    match encoded.find? (fun (x, _) => x == a) with
+    | some (_, code) => acc + code.length * count
+    | none => acc  -- or handle missing case as needed
+  ) 0
+
+-- #eval Huffmann.leastEncodedData eg₁ -- 224
+
+
+/-
+The Vertex is a shorthand for Nodes or Leaf of the Tree. They only contain the code of the vertex.
+Why it is made? 
+* To generalise properties to any vertex in statement than have to write for both Leaf and Node.
+-/
 inductive Vertex where
   | Node (code : BoolList)
   | Leaf (code : BoolList)
@@ -316,11 +374,17 @@ def Vertex.code : Vertex → BoolList
   | Node c => c
   | Leaf c => c
 
+/-
+The vertices of a Huffman tree are the nodes and leaves of the tree. The function returns Leaf/Node with their corresponding codes.
+-/
 @[simp]
 def HfmnTree.vertices : HfmnTree α → List Vertex
   | HfmnTree.Leaf _ _ code => [Vertex.Leaf code]
   | HfmnTree.Node l r code => Vertex.Node code :: (vertices l ++ vertices r)
 
+/-
+Theorem: The vertices of a Huffman tree are non-empty.
+-/
 theorem HfmnTree.vertices_nonempty (t : HfmnTree α) :
   t.vertices ≠ [] := by
   induction t with
@@ -331,6 +395,10 @@ theorem HfmnTree.vertices_nonempty (t : HfmnTree α) :
  
 -- #eval HfmnTree.vertices (HfmnTree.tree eg₁)
 
+/-
+* Theorem - The encodings of all vertices are unique.
+This is true by construction of the tree.
+-/
 theorem HfmnTree.all_codes_unique (t : HfmnTree α) : 
     (t.vertices).Pairwise (fun v₁ v₂ => Vertex.code v₁ ≠ Vertex.code v₂) := by
   induction t with
@@ -359,32 +427,42 @@ theorem HfmnTree.all_codes_unique (t : HfmnTree α) :
     case right =>
       sorry
     
--- chars returns the set of characters in the tree
+/- Returns the set of values in the tree. -/
 def HfmnTree.chars: HfmnTree α → List α
   | Leaf c _ _ => [c]
   | Node l r _ => l.chars ++ r.chars
 
--- Helper list intersection function
+/- Helper list intersection function. -/
 def List.inter(l₁ l₂ : List α) : List α :=
   l₁.filter (· ∈ l₂)
 
+/- Helper function to check if a character is in the tree. -/
 def HfmnTree.charInTree (t : HfmnTree α) (c : α) : Bool :=
   t.chars.contains c
 
+/-
+* Property: The characters/values in the left and right subtrees of a node are disjoint.
+-/
 def disjointChars (t : HfmnTree α) : Prop :=
   match t with 
   | HfmnTree.Leaf _ _ _ => True
   | HfmnTree.Node l r _ =>
     [] = l.chars.inter r.chars
 
--- Theorem: Merge of two trees with disjoint characters is disjoint
+/-
+Theorem: Merge of two trees with disjoint characters is disjoint
+-/
 theorem merge_preserves_disjoint_chars {α : Type} [DecidableEq α] (l r : HfmnTree α) :
   disjointChars l → disjointChars r → l.chars.inter r.chars = [] → disjointChars (mergeTrees l r) := by
   intro h₁ h₂ h₃
   simp [mergeTrees, disjointChars] 
   assumption
 
--- the characters in any left and right tree are disjoint
+/-
+* Theorem: disjointChars Property holds true for the Huffmann tree.
+This is to show that the same character can not be present in more than one Leaf.
+If vertex at leaf₁ = vertex at leaf₂, then the characters are same.
+-/
 theorem left_right_tree_disjoint_chars (huffinput: AlphaNumList α) :
   disjointChars (HfmnTree.tree huffinput) := by
   induction huffinput with
@@ -399,17 +477,23 @@ theorem left_right_tree_disjoint_chars (huffinput: AlphaNumList α) :
     | b :: rest' =>
       sorry 
     
--- check if 2 BoolEncList are prefix free of each other
+
+/- Check if 2 BoolEncList are prefix free of each other. -/
 def checkPrefixfree (bl₁ bl₂: BoolList) : Bool :=
   bl₁ ≠ bl₂ ∧ ¬(bl₁.isPrefixOf bl₂ ∨ bl₂.isPrefixOf bl₁)
 
 -- #eval checkPrefixfree [true, false, false] [true, false] -- false
 
--- Check if the encoded list is prefix free, i.e. compares each encoded string with all other strings
+/-
+Check if the encoded list is prefix free, i.e. compares each encoded string with all other strings.
+-/
 def isPrefixfree : BoolEncList α → Bool
   | [] => true
   | (_, bl) :: rest => rest.all (fun al => checkPrefixfree bl al.2) && isPrefixfree rest
 
+/-
+* Property: A tree is prefix-free if no code is a prefix of another code.
+-/
 def prefixFreeTree (huffinput : AlphaNumList α) : Prop :=
   let enc_list := HfmnTree.encodedList huffinput
   isPrefixfree enc_list
@@ -419,6 +503,9 @@ def prefixFreeTree (huffinput : AlphaNumList α) : Prop :=
 -- #eval isPrefixfree (conv_str_freq_boollist [('a', "0"),('b', "101"),('c', "100"),('d', "011"),('e', "1101"),('f', "1100")]) -- false
 
 
+/-
+* Theorem: The Huffmann tree is prefix-free.
+-/
 theorem HfmnTree.hfmntree_is_prefix_free (t : HfmnTree α) :
   t.vertices.Pairwise (fun v₁ v₂ => v₁ ≠ v₂ → checkPrefixfree v₁.code v₂.code) := by
   induction t with
@@ -446,20 +533,12 @@ theorem HfmnTree.hfmntree_is_prefix_free (t : HfmnTree α) :
     case right =>
       sorry
 
-
+/-
+Decoding the encoded input. decode(encode(x)) = x, since the tree is prefix free and the code is unique.
+This should be our final goal, to show for a huffman tree, the decoding of the encoded input is equal to the original input.
+-/
 def HfmnTree.decode (enc_boolinput : BoolList) (enc_huffinput : List (α × BoolList)) : Option α :=
   enc_huffinput.find? (λ (_, s) => s = enc_boolinput) |>.map (·.1)
 
 -- #eval HfmnTree.decode "1" ( HfmnTree.encoded_tree eg₁ ).1 -- none
 -- #eval HfmnTree.decode "0" ( HfmnTree.encoded_tree eg₁ ).1 -- some 'a'
-
-
-def Huffmann.leastEncodedData (huffinput : AlphaNumList α) : Nat :=
-  let encoded := HfmnTree.encodedList huffinput
-  huffinput.foldl (fun acc (a, count) => 
-    match encoded.find? (fun (x, _) => x == a) with
-    | some (_, code) => acc + code.length * count
-    | none => acc  -- or handle missing case as needed
-  ) 0
-
--- #eval Huffmann.leastEncodedData eg₁ -- 224
