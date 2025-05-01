@@ -44,13 +44,13 @@ The HfmnTree is a binary tree where each node can be either a leaf or an interna
 An inductive type is used to represent the tree structure, where a Node has a left and right Huffman Trees while Lead just has the values and weights. Both contain the BoolList uptill that vertex.
 -/
 inductive HfmnTree (α : Type) where
-  | Node (left : HfmnTree α) (right : HfmnTree α) (code : BoolList := [])
-  | Leaf (val : α) (weight : Nat) (code : BoolList := [])
+  | Node (left : HfmnTree α) (right : HfmnTree α)
+  | Leaf (val : α) (weight : Nat)
 deriving Inhabited, Repr
 
 def HfmnTree.weight : HfmnTree α → Nat
-  | Leaf _ w _ => w
-  | Node l r _ => l.weight + r.weight
+  | Leaf _ w => w
+  | Node l r => l.weight + r.weight
 
 /-
 Comparison function for Huffman trees weights
@@ -117,21 +117,12 @@ theorem sorted_nonempty_is_nonempty (trees : List (HfmnTree α)) (h : trees ≠ 
     apply insertionSort_preserves_length
   have h₂: (insertionSort trees).length > 0 := by
     rw [h₁]
-    simp [List.length, h]
-    simp [List.length_pos_iff]
-    exact h
+    exact List.length_pos_iff.mpr h
   simp [List.ne_nil_of_length_pos, h₂]
 
 
 def String.freq(s : String) (c : Char) := s.data.filter (· == c) |>.length
 -- #eval "hello".freq 'l' --2
-
-def assignCodes {α : Type} : HfmnTree α → BoolList → HfmnTree α
-  | .Leaf val wt _, code => .Leaf val wt code
-  | .Node l r _, code =>
-      let left  := assignCodes l (code ++ [false])
-      let right := assignCodes r (code ++ [true])
-      .Node left right code
 
 /-
 If t1 t2 is either Leaf or Node, when merged, it will be a Node.
@@ -152,7 +143,7 @@ def HfmnTree.merge (trees : List (HfmnTree α)) (h : trees ≠ []) : HfmnTree α
 
   match p:sorted with
   | [] => by simp at hp
-  | [t] => assignCodes t [] -- 
+  | [t] => t
   | t1 :: t2 :: rest =>
     let newTree := .mergeTrees t1 t2
     have : rest.length + 1 < trees.length := by
@@ -163,78 +154,6 @@ def HfmnTree.merge (trees : List (HfmnTree α)) (h : trees ≠ []) : HfmnTree α
 termination_by trees.length
 
 def eg : BoolList := [true, false, true, false]
-
-
-/-
-The encodeWithDepth function encodes a character starting from root of given `t` tree. Thus if given the full HfmnTree, it wil return complete encoding of the tree. Else it may just give the encoding starting from given tree.
--/
-def HfmnTree.encodeWithDepth (c : α) (t : HfmnTree α) : (BoolList × Nat) :=
-  let coded := assignCodes t []
-  let rec search (tree : HfmnTree α) (d : Nat) : (BoolList × Nat) :=
-    match tree with
-    | HfmnTree.Leaf val _ code => if val = c then (code, d) else ([], 0)
-    | HfmnTree.Node l r _ =>
-        let left := search l (d + 1)
-        if left.fst ≠ [] then left else search r (d + 1)
-  search coded 0
-
-def HfmnTree.encode (c : α) (t: HfmnTree α) : BoolList :=
-  (HfmnTree.encodeWithDepth c t).1
-
-def HfmnTree.depth (c : α) (t: HfmnTree α) : Nat :=
-  (HfmnTree.encodeWithDepth c t).2
-
-/-
-* Theorem: Depth is equal to the length of the code
--/
--- theorem HfmnTree.depth_is_length_enc (c: α) (t: HfmnTree α) (code : BoolList) :
---   t.encode c = code → t.depth c = code.length := by
---     cases t
---     case Leaf c' w cc =>
---       simp [encode, depth, encodeWithDepth]
---       intro h₁ h₂
---       simp [h₁, h₂]
---     case Node l r code =>
---       match p:l.encodeWithDepth c, p':r.encodeWithDepth c with
---       | none, some (s, d) => -- s is the code of the right tree
---         simp [encode, depth, encodeWithDepth, p, p']
---         intro h
---         match code with
---         | ch :: ct =>
---           let ihr := HfmnTree.depth_is_length_enc c r ct
---           simp [encode, depth, encodeWithDepth, p, p'] at ihr
---           simp at h 
---           
---           rename_i bl
---           sorry
---         | code =>
---           rename_i bl br
---           match bl with
---           | [] => 
---             simp [encode, depth, encodeWithDepth, p, p']
---             have : (code ++ [true]).length > 0 := by
---               simp [List.length, List.length_pos_iff] 
---             sorry
---           | rest =>
---
---             sorry
---
---       | some (s, d), none =>
---         simp [encode, depth, encodeWithDepth, p, p']
---         intro h
---         match code with
---         | ch :: ct =>
---           let ihl := HfmnTree.depth_is_length_enc c l ct
---           simp [encode, depth, encodeWithDepth, p, p'] at ihl
---           simp at h
---           sorry
---         | code =>
---           sorry
---       | none, none =>
---         simp [encode, depth, encodeWithDepth, p, p']
---       | some (s, d), some (s', d') =>
---         simp [encode, depth, encodeWithDepth, p, p']
---
 
 /-
 The Alphabet structure is used to represent the values and their frequencies in the input data. It contains a value of type α and a frequency of type Nat.
@@ -257,11 +176,10 @@ theorem cita_ne_to_ne (s : AlphaNumList α) (h : s ≠ []) :
   have h₁ : (convert_input_to_alphabet s).length = s.length := by
     apply List.length_map
   have h₂ : (convert_input_to_alphabet s).length = 0 := by
-    rw [hi]
-    simp [List.length, List.length_map] 
+    exact List.eq_nil_iff_length_eq_zero.mp hi
   have h₃ : (convert_input_to_alphabet s).length > 0 := by
     rw [h₁]
-    simp [List.length, h, List.length_pos_iff] 
+    exact List.length_pos_iff.mpr h
   rw [h₂] at h₃
   exact Nat.lt_irrefl 0 h₃
 
@@ -277,7 +195,7 @@ def HfmnTree.tree (huffinput : AlphaNumList α) : HfmnTree α :=
     let input := convert_input_to_alphabet huffinput
     have hi : input ≠ [] := by
       apply cita_ne_to_ne
-      exact huffinput_nonempty 
+      assumption
 
     let leaves : List (HfmnTree α) := input.map (fun a => HfmnTree.Leaf a.val a.freq)
     have hl : leaves ≠ [] := by
@@ -285,8 +203,7 @@ def HfmnTree.tree (huffinput : AlphaNumList α) : HfmnTree α :=
       have h₁ : (leaves).length = (input).length := by
         apply List.length_map
       have h₂ : (leaves).length = 0 := by
-        rw [h]
-        simp [List.length, List.length_map]
+        exact List.eq_nil_iff_length_eq_zero.mp h 
       have h₃ : (leaves).length > 0 := by
         rw [h₁]
         simp [List.length, huffinput_nonempty, List.length_pos_iff, hi]
@@ -304,16 +221,25 @@ def HfmnTree.tree (huffinput : AlphaNumList α) : HfmnTree α :=
 
 -- #eval HfmnTree.tree eg₁
 
+    
+/- Returns the set of values in the tree. -/
+def HfmnTree.chars: HfmnTree α → List α
+  | Leaf c _  => [c]
+  | Node l r  => l.chars ++ r.chars
+
+/- Helper function to check if a character is in the tree. -/
+def HfmnTree.charInTree (t : HfmnTree α) (c : α) : Bool :=
+  t.chars.contains c
+
+def assignCodes (t: HfmnTree α) (c : α) : BoolList :=
+
+
+
+
 /-
 Extracts the encoded BoolList from a Huffman tree.
 -/
-def HfmnTree.encodedList (huffinput : AlphaNumList α) : BoolEncList α :=
-  let codedTree := assignCodes (HfmnTree.tree huffinput) []
-  let rec collect (t : HfmnTree α) : BoolEncList α :=
-    match t with
-    | HfmnTree.Leaf c _ code => [(c, code)]
-    | HfmnTree.Node l r _    => collect l ++ collect r
-  collect codedTree
+-- def HfmnTree.encodedList (huffinput : AlphaNumList α) : BoolEncList α :=
 
 -- #eval HfmnTree.encodedList eg₁
 --   [('a', [false]),
@@ -406,6 +332,7 @@ theorem HfmnTree.all_codes_unique (t : HfmnTree α) :
             rw [hvcode]
           rw [← h₃] at h₁
 
+             
           sorry 
       | inr hr' =>
         have h': Vertex.code v ∈ r.vertices.map Vertex.code := by
@@ -421,28 +348,11 @@ theorem HfmnTree.all_codes_unique (t : HfmnTree α) :
 
     case right =>
       sorry
-    
-/- Returns the set of values in the tree. -/
-def HfmnTree.chars: HfmnTree α → List α
-  | Leaf c _ _ => [c]
-  | Node l r _ => l.chars ++ r.chars
+
 --
 -- /- Helper list intersection function. -/
 -- def List.inter(l₁ l₂ : List α) : List α :=
 --   l₁.filter (· ∈ l₂)
-
-/- Helper function to check if a character is in the tree. -/
-def HfmnTree.charInTree (t : HfmnTree α) (c : α) : Bool :=
-  t.chars.contains c
-
-/-
-* Property: The characters/values in the left and right subtrees of a node are disjoint.
--/
-def disjointChars (t : HfmnTree α) : Prop :=
-  match t with 
-  | HfmnTree.Leaf _ _ _ => True
-  | HfmnTree.Node l r _ =>
-    [] = l.chars.inter r.chars
 
 /-
 * Theorem: Merge of two trees with disjoint characters is disjoint
