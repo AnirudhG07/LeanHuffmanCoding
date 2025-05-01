@@ -220,7 +220,6 @@ def HfmnTree.tree (huffinput : AlphaNumList α) : HfmnTree α :=
     sorted_tree
 
 -- #eval HfmnTree.tree eg₁
-
     
 /- Returns the set of values in the tree. -/
 def HfmnTree.chars: HfmnTree α → List α
@@ -231,15 +230,25 @@ def HfmnTree.chars: HfmnTree α → List α
 def HfmnTree.charInTree (t : HfmnTree α) (c : α) : Bool :=
   t.chars.contains c
 
-def assignCodes (t: HfmnTree α) (c : α) : BoolList :=
+def HfmnTree.encode (c: α) (t : HfmnTree α) : BoolList :=
+  match t with
+  | .Leaf c' _ =>
+    if c = c' then [] else panic! "-1" -- This should never happen
+  | .Node l r =>
+    if l.charInTree c then
+      false :: encode c l
+    else
+      true :: encode c r
 
-
-
+-- #eval HfmnTree.encode 'a' (HfmnTree.tree eg₁) -- [false]
 
 /-
 Extracts the encoded BoolList from a Huffman tree.
 -/
--- def HfmnTree.encodedList (huffinput : AlphaNumList α) : BoolEncList α :=
+def HfmnTree.encodedList (huffinput : AlphaNumList α) : BoolEncList α :=
+  let huffTree := HfmnTree.tree huffinput
+  let chars := huffTree.chars
+  chars.map (fun c => (c, HfmnTree.encode c huffTree))
 
 -- #eval HfmnTree.encodedList eg₁
 --   [('a', [false]),
@@ -281,32 +290,58 @@ def Vertex.code : Vertex → BoolList
 The vertices of a Huffman tree are the nodes and leaves of the tree. The function returns Leaf/Node with their corresponding codes.
 -/
 @[simp]
-def HfmnTree.vertices : HfmnTree α → List Vertex
-  | HfmnTree.Leaf _ _ code => [Vertex.Leaf code]
-  | HfmnTree.Node l r code => Vertex.Node code :: (vertices l ++ vertices r)
+def HfmnTree.vertices : HfmnTree α → BoolList → List Vertex
+  | .Leaf _ _, code => [Vertex.Leaf code]
+  | .Node l r, code =>
+    let leftVertices := vertices l (code ++ [false])
+    let rightVertices := vertices r (code ++ [true])
+    Vertex.Node code :: (leftVertices ++ rightVertices)
+
+-- #eval HfmnTree.vertices (HfmnTree.tree eg₁) []
+
+theorem HfmnTree.initialCodeIsPrefix (t : HfmnTree α) (inicode : BoolList) :
+  ∀ v ∈ t.vertices inicode, inicode.isPrefixOf (Vertex.code v) := by
+  intro v hv
+  simp only [List.isPrefixOf_iff_prefix]
+  induction t with
+  | Leaf c w =>
+    simp [vertices] at hv
+    cases hv with
+    | refl => sorry
+
+  | Node l r =>
+    simp [vertices] at hv
+    rename_i ihl ihr
+    cases hv with
+    | inl hl => sorry
+      
+    | inr hr' => sorry
+
 
 /-
 * Theorem: The vertices of a Huffman tree are non-empty.
 -/
-theorem HfmnTree.vertices_nonempty (t : HfmnTree α) :
-  t.vertices ≠ [] := by
-  induction t with
-  | Leaf c w code =>
+theorem HfmnTree.vertices_nonempty (t : HfmnTree α) (code : BoolList) :
+  t.vertices code ≠ [] := by
+  induction t generalizing code with
+  | Leaf _ _ =>
     simp [vertices]
-  | Node l r code =>
+  | Node _ _ _ _ =>
     simp [vertices]
  
 -- #eval HfmnTree.vertices (HfmnTree.tree eg₁)
+
 /-
 * Theorem - The encodings of all vertices are unique.
 This is true by construction of the tree.
 -/
 theorem HfmnTree.all_codes_unique (t : HfmnTree α) : 
-    (t.vertices).Pairwise (fun v₁ v₂ => v₁ = v₂ ↔  Vertex.code v₁ = Vertex.code v₂) := by
+    (t.vertices []).Pairwise (fun v₁ v₂ => Vertex.code v₁ ≠ Vertex.code v₂) := by
   induction t with
-  | Leaf c w code =>
+  | Leaf c w =>
     simp [vertices]
-  | Node l r code =>
+
+  | Node l r =>
     simp [vertices]
     rename_i ihl ihr
     constructor
@@ -315,44 +350,29 @@ theorem HfmnTree.all_codes_unique (t : HfmnTree α) :
       intro v hl
       cases hl with
       | inl hl =>
-        have h': Vertex.code v ∈ l.vertices.map Vertex.code := by
+        have h' : Vertex.code v ∈ (l.vertices [false]).map Vertex.code := by
           simp [List.mem_map]; exact ⟨v, hl, rfl⟩
-        constructor
-        · simp [List.mem_map] at h'
-          intro h''
-          rw [h'']
-        · simp [List.mem_map] at h'
-          intro h₁
-          obtain ⟨v', hv', hvcode⟩ := h'
-          by_contra h₂
-          have h₂ : Vertex.Node code ≠ v := by
-            exact h₂
-
-          have h₃ : Vertex.code v' = Vertex.code v := by
-            rw [hvcode]
-          rw [← h₃] at h₁
-
-             
-          sorry 
+        simp [List.mem_map] at h'
+        by_contra hc
+        sorry
       | inr hr' =>
-        have h': Vertex.code v ∈ r.vertices.map Vertex.code := by
+        have h': Vertex.code v ∈ (r.vertices [true]).map Vertex.code := by
           simp [List.mem_map]; exact ⟨v, hr', rfl⟩
         simp [List.mem_map] at h' 
-        constructor
-        · intro h₁
-          rw [h₁]
-        · intro h₁
-          obtain ⟨v', hv', hvc⟩ := h'
-          sorry
-          
+        by_contra hc
+        sorry 
 
     case right =>
       sorry
 
---
--- /- Helper list intersection function. -/
--- def List.inter(l₁ l₂ : List α) : List α :=
---   l₁.filter (· ∈ l₂)
+/-
+* Property: The characters/values in the left and right subtrees of a node are disjoint.
+-/
+def disjointChars (t : HfmnTree α) : Prop :=
+  match t with 
+  | HfmnTree.Leaf _ _ => True
+  | HfmnTree.Node l r =>
+    [] = l.chars.inter r.chars
 
 /-
 * Theorem: Merge of two trees with disjoint characters is disjoint
@@ -413,9 +433,9 @@ def prefixFreeTree (huffinput : AlphaNumList α) : Prop :=
 * Theorem: The Huffmann tree is prefix-free.
 -/
 theorem HfmnTree.hfmntree_is_prefix_free (t : HfmnTree α) :
-  t.vertices.Pairwise (fun v₁ v₂ => v₁ ≠ v₂ → checkPrefixfree v₁.code v₂.code) := by
+  (t.vertices []).Pairwise (fun v₁ v₂ => v₁ ≠ v₂ → checkPrefixfree v₁.code v₂.code) := by
   induction t with
-  | Leaf c w code =>
+  | Leaf c w =>
     simp [vertices]
   | Node l r code =>
     simp [vertices]
@@ -426,13 +446,13 @@ theorem HfmnTree.hfmntree_is_prefix_free (t : HfmnTree α) :
       intro v hl hr
       cases hl with
       | inl hl =>
-        have h': Vertex.code v ∈ l.vertices.map Vertex.code := by
+        have h': Vertex.code v ∈ (l.vertices [false]).map Vertex.code := by
           simp [List.mem_map]; exact ⟨v, hl, rfl⟩
         simp [List.mem_map] at h'
         sorry
         
       | inr hr' =>
-        have h': Vertex.code v ∈ r.vertices.map Vertex.code := by
+        have h': Vertex.code v ∈ (r.vertices [true]).map Vertex.code := by
           simp [List.mem_map]; exact ⟨v, hr', rfl⟩
         simp [List.mem_map] at h' 
         sorry
