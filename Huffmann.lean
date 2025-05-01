@@ -10,7 +10,7 @@ Some of the properties of Huffmann trees are:
 
 We implements the Huffmann tree construction algorithm, and prove its correctness.
 -/
-
+import Mathlib
 set_option linter.unusedSectionVars false
 
 abbrev BoolList := List Bool
@@ -164,21 +164,6 @@ termination_by trees.length
 
 def eg : BoolList := [true, false, true, false]
 
-def depthAux (tree: HfmnTree α) (c: α) (d: Int) : Int :=
-  match tree with
-  | HfmnTree.Leaf c' _ _ =>
-    -- The decidability of equality has been invoked previously for the type α
-    if c = c' then d else -1
-  | HfmnTree.Node l r _ =>
-    let leftDepth := depthAux l c (d + 1)
-    if leftDepth != -1 then leftDepth else depthAux r c (d + 1)
-
-/-
-Returns the depth of a character in the Huffman tree, if not found returns -1
--/
-def HfmnTree.findDepth (tree: HfmnTree α) (c: α) : Int :=
-  -- Helper function to calculate the depth of a character in the tree
-  depthAux tree c 0 
 
 /-
 The encodeWithDepth function encodes a character starting from root of given `t` tree. Thus if given the full HfmnTree, it wil return complete encoding of the tree. Else it may just give the encoding starting from given tree.
@@ -250,8 +235,6 @@ def HfmnTree.depth (c : α) (t: HfmnTree α) : Nat :=
 --       | some (s, d), some (s', d') =>
 --         simp [encode, depth, encodeWithDepth, p, p']
 --
--- #eval depthAux (HfmnTree.Leaf 'a' 1) 'a' 0 -- 0
--- #eval depthAux (HfmnTree.Node (HfmnTree.Leaf 'a' 1) (HfmnTree.Leaf 'b' 2) ) 'a' 0
 
 /-
 The Alphabet structure is used to represent the values and their frequencies in the input data. It contains a value of type α and a frequency of type Nat.
@@ -351,7 +334,8 @@ def Huffmann.leastEncodedData (huffinput : AlphaNumList α) : Nat :=
     | none => acc  -- or handle missing case as needed
   ) 0
 
--- #eval Huffmann.leastEncodedData eg₁ -- 224  
+-- #eval Huffmann.leastEncodedData eg₁ -- 224 
+
 
 /-
 The Vertex is a shorthand for Nodes or Leaf of the Tree. They only contain the code of the vertex.
@@ -387,13 +371,12 @@ theorem HfmnTree.vertices_nonempty (t : HfmnTree α) :
     simp [vertices]
  
 -- #eval HfmnTree.vertices (HfmnTree.tree eg₁)
-
 /-
 * Theorem - The encodings of all vertices are unique.
 This is true by construction of the tree.
 -/
 theorem HfmnTree.all_codes_unique (t : HfmnTree α) : 
-    (t.vertices).Pairwise (fun v₁ v₂ => v₁ ≠ v₂ → Vertex.code v₁ ≠ Vertex.code v₂) := by
+    (t.vertices).Pairwise (fun v₁ v₂ => v₁ = v₂ ↔  Vertex.code v₁ = Vertex.code v₂) := by
   induction t with
   | Leaf c w code =>
     simp [vertices]
@@ -403,19 +386,38 @@ theorem HfmnTree.all_codes_unique (t : HfmnTree α) :
     constructor
 
     case left =>
-      intro v hl hr
+      intro v hl
       cases hl with
       | inl hl =>
         have h': Vertex.code v ∈ l.vertices.map Vertex.code := by
           simp [List.mem_map]; exact ⟨v, hl, rfl⟩
-        simp [List.mem_map] at h'
-         
-        sorry
+        constructor
+        · simp [List.mem_map] at h'
+          intro h''
+          rw [h'']
+        · simp [List.mem_map] at h'
+          intro h₁
+          obtain ⟨v', hv', hvcode⟩ := h'
+          by_contra h₂
+          have h₂ : Vertex.Node code ≠ v := by
+            exact h₂
+
+          have h₃ : Vertex.code v' = Vertex.code v := by
+            rw [hvcode]
+          rw [← h₃] at h₁
+
+          sorry 
       | inr hr' =>
         have h': Vertex.code v ∈ r.vertices.map Vertex.code := by
           simp [List.mem_map]; exact ⟨v, hr', rfl⟩
         simp [List.mem_map] at h' 
-        sorry
+        constructor
+        · intro h₁
+          rw [h₁]
+        · intro h₁
+          obtain ⟨v', hv', hvc⟩ := h'
+          sorry
+          
 
     case right =>
       sorry
@@ -424,10 +426,10 @@ theorem HfmnTree.all_codes_unique (t : HfmnTree α) :
 def HfmnTree.chars: HfmnTree α → List α
   | Leaf c _ _ => [c]
   | Node l r _ => l.chars ++ r.chars
-
-/- Helper list intersection function. -/
-def List.inter(l₁ l₂ : List α) : List α :=
-  l₁.filter (· ∈ l₂)
+--
+-- /- Helper list intersection function. -/
+-- def List.inter(l₁ l₂ : List α) : List α :=
+--   l₁.filter (· ∈ l₂)
 
 /- Helper function to check if a character is in the tree. -/
 def HfmnTree.charInTree (t : HfmnTree α) (c : α) : Bool :=
@@ -465,6 +467,7 @@ theorem left_right_tree_disjoint_chars (huffinput: AlphaNumList α) :
     match rest with 
     | [] => -- Base case: if the list is empty, the tree is a leaf
       sorry
+      
     | [b] => -- Only 1 element      
       sorry
     | b :: rest' =>
@@ -517,6 +520,7 @@ theorem HfmnTree.hfmntree_is_prefix_free (t : HfmnTree α) :
           simp [List.mem_map]; exact ⟨v, hl, rfl⟩
         simp [List.mem_map] at h'
         sorry
+        
       | inr hr' =>
         have h': Vertex.code v ∈ r.vertices.map Vertex.code := by
           simp [List.mem_map]; exact ⟨v, hr', rfl⟩
