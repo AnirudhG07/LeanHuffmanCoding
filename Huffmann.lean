@@ -302,29 +302,35 @@ def HfmnTree.vertices : HfmnTree α → BoolList → List Vertex
 
 -- #eval HfmnTree.vertices (HfmnTree.tree eg₁) []
 
-@[simp]
+
 lemma HfmnTree.initialCode_in_suffix_inits (t : HfmnTree α) (given_code suffix : BoolList) :
   ∀ v ∈ t.vertices (given_code ++ suffix), given_code ∈ List.inits v.code := by
   intro v hv
   simp only [List.mem_inits]
-  induction t with
+  cases t with
   | Leaf c w =>
     simp [vertices] at hv
     cases hv with
-    | refl => 
+    | refl =>
       simp only [Vertex.code, List.inits, List.prefix_rfl, List.prefix_append]
   | Node l r =>
+    have ihl := initialCode_in_suffix_inits l given_code (suffix ++ [false])
+    have ihr := initialCode_in_suffix_inits r given_code (suffix ++ [true])
     simp [vertices] at hv
-    rename_i ihl ihr
     cases hv with
     | inl h₁ =>
       rw [h₁]
       simp [Vertex.code]
     | inr h₃  =>
       cases h₃ with
-      | inl h₁ => sorry
-      | inr h₂ => sorry 
-      
+      | inl h₁ =>
+        have h' :=  ihl v h₁
+        simp at h'
+        exact h'
+      | inr h₂ =>
+        have h' :=  ihr v h₂
+        simp at h'
+        exact h'
 
 
 theorem HfmnTree.initialCodeIsPrefix (t : HfmnTree α) (inicode : BoolList) :
