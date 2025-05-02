@@ -286,6 +286,9 @@ def Vertex.code : Vertex → BoolList
   | Node c => c
   | Leaf c => c
 
+-- #eval (Vertex.Leaf [false, true]).code
+-- #eval (Vertex.Node [false, true]).code
+
 /-
 The vertices of a Huffman tree are the nodes and leaves of the tree. The function returns Leaf/Node with their corresponding codes.
 -/
@@ -299,6 +302,31 @@ def HfmnTree.vertices : HfmnTree α → BoolList → List Vertex
 
 -- #eval HfmnTree.vertices (HfmnTree.tree eg₁) []
 
+@[simp]
+lemma HfmnTree.initialCode_in_suffix_inits (t : HfmnTree α) (given_code suffix : BoolList) :
+  ∀ v ∈ t.vertices (given_code ++ suffix), given_code ∈ List.inits v.code := by
+  intro v hv
+  simp only [List.mem_inits]
+  induction t with
+  | Leaf c w =>
+    simp [vertices] at hv
+    cases hv with
+    | refl => 
+      simp only [Vertex.code, List.inits, List.prefix_rfl, List.prefix_append]
+  | Node l r =>
+    simp [vertices] at hv
+    rename_i ihl ihr
+    cases hv with
+    | inl h₁ =>
+      rw [h₁]
+      simp [Vertex.code]
+    | inr h₃  =>
+      cases h₃ with
+      | inl h₁ => sorry
+      | inr h₂ => sorry 
+      
+
+
 theorem HfmnTree.initialCodeIsPrefix (t : HfmnTree α) (inicode : BoolList) :
   ∀ v ∈ t.vertices inicode, inicode.isPrefixOf (Vertex.code v) := by
   intro v hv
@@ -307,16 +335,25 @@ theorem HfmnTree.initialCodeIsPrefix (t : HfmnTree α) (inicode : BoolList) :
   | Leaf c w =>
     simp [vertices] at hv
     cases hv with
-    | refl => sorry
+    | refl => 
+      simp only [Vertex.code, List.prefix_rfl]
 
   | Node l r =>
     simp [vertices] at hv
     rename_i ihl ihr
     cases hv with
-    | inl hl => sorry
+    | inl hl =>
+        apply (List.mem_inits inicode v.code).mp
+        rw [hl]
+        simp only [Vertex.code, List.mem_inits, List.prefix_rfl]
       
-    | inr hr' => sorry
-
+    | inr hr =>
+        apply (List.mem_inits inicode v.code).mp
+        cases hr with
+        | inl h₁ =>
+          exact HfmnTree.initialCode_in_suffix_inits _ _ _ v h₁
+        | inr h₂ =>
+          exact HfmnTree.initialCode_in_suffix_inits _ _ _ v h₂
 
 /-
 * Theorem: The vertices of a Huffman tree are non-empty.
