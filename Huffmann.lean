@@ -313,6 +313,9 @@ theorem HfmnTree.vertices_nonempty (t : HfmnTree α) (code : BoolList) :
   | Node _ _ _ _ =>
     simp [vertices]
 
+/-
+* Lemma: If a vertex is in the vertices of initial code as (given_code ++ suffix), then the given_code is a prefix of the vertex code.
+-/
 lemma HfmnTree.initialCode_in_suffix_inits (t : HfmnTree α) (given_code suffix : BoolList) :
   ∀ v ∈ t.vertices (given_code ++ suffix), given_code ∈ List.inits v.code := by
   intro v hv
@@ -342,7 +345,9 @@ lemma HfmnTree.initialCode_in_suffix_inits (t : HfmnTree α) (given_code suffix 
         simp at h'
         exact h'
 
-
+/-
+* Theorem: The initial code of `vertices` of Huffman tree is a prefix of all the vertex code of the tree.
+-/
 theorem HfmnTree.initialCodeIsPrefix (t : HfmnTree α) (inicode : BoolList) :
   ∀ v ∈ t.vertices inicode, inicode.isPrefixOf (Vertex.code v) := by
   intro v hv
@@ -371,16 +376,22 @@ theorem HfmnTree.initialCodeIsPrefix (t : HfmnTree α) (inicode : BoolList) :
         | inr h₂ =>
           exact HfmnTree.initialCode_in_suffix_inits _ _ _ v h₂
 
+/-
+* Lemma: If two codes are prefixes of a code, and one has lesser length, then that is prefix of the other.
+-/
 @[simp]
 lemma lenpref_of_pref_isprefix (c₁ c₂ : BoolList) (v : BoolList) :
   c₁ <+: v → c₂ <+: v → c₁.length ≤ c₂.length → c₁ <+: c₂  := by
   exact fun a a_1 a_2 ↦ List.prefix_of_prefix_length_le a a_1 a_2
 
+/-
+* Theorem: Given two trees with their respective initial codes which are prefix free of each other, then the codes of vertices in the trees are disjoint.
+-/
 theorem HfmnTree.codes_disjoint_of_nonprefix 
   (t₁ t₂ : HfmnTree α) (c₁ c₂ : BoolList)
   (h₁ : ¬ c₁ <+: c₂) (h₂ : ¬ c₂ <+: c₁) :
   ∀ v₁ ∈ t₁.vertices c₁, ∀ v₂ ∈ t₂.vertices c₂, Vertex.code v₁ ≠ Vertex.code v₂ := by
-  intro v₁ hv₁ v₂ hv₂
+  intro v₁ hv₁ v₂ hv₂ heq
   -- the initial codes themselves must be unequal
   have hnc : c₁ ≠ c₂ := by
     intro eq; apply h₁;
@@ -390,17 +401,11 @@ theorem HfmnTree.codes_disjoint_of_nonprefix
   have p₁ := HfmnTree.initialCodeIsPrefix t₁ c₁ v₁ hv₁
   have p₂ := HfmnTree.initialCodeIsPrefix t₂ c₂ v₂ hv₂
 
-  intro heq
   -- if the codes are equal, then the prefixes must be equal
   have hne₁ : c₁.isPrefixOf v₂.code := by
     simp only [List.isPrefixOf_iff_prefix]
     rw [← heq]
     exact List.isPrefixOf_iff_prefix.mp p₁
-
-  have hne₂ : c₂.isPrefixOf v₁.code := by
-    simp only [List.isPrefixOf_iff_prefix]
-    rw [heq]
-    exact List.isPrefixOf_iff_prefix.mp p₂
 
   if hl: c₁.length ≤ c₂.length then
     have h': c₁ <+: c₂ := by
@@ -415,39 +420,59 @@ theorem HfmnTree.codes_disjoint_of_nonprefix
       exact lenpref_of_pref_isprefix c₂ c₁ v₂.code p₂ hne₁ hl'
       
     contradiction
+
+
+/-
+* Lemma: For any boolean list c, c ++ [false] is not a prefix of c ++ [true].
+-/
+@[simp]
+lemma code_ft_not_prefix (c : BoolList) :
+  ¬ c ++ [false] <+: c ++ [true] := by
+  intro h
+  have h₁ : (c ++ [false]).length = (c ++ [true]).length := by
+    simp only [List.length_append, List.length_cons, List.length_nil, zero_add]
+  have h₂ : c ++ [true] = c ++ [false] := by
+    exact Eq.symm (List.IsPrefix.eq_of_length h h₁)
+  have h₃ : c ++ [false] ≠ c ++ [true] := by
+    simp only [ne_eq, List.append_cancel_left_eq, List.cons.injEq, Bool.false_eq_true, and_true,
+      not_false_eq_true]
+  simp at h₂
+
+@[simp]
+lemma code_tf_not_prefix (c : BoolList) :
+  ¬ c ++ [true] <+: c ++ [false] := by
+  have h: ¬ c ++ [false] <+: c ++ [true] := by
+    exact code_ft_not_prefix c
+  simp only [List.prefix_append_right_inj, List.cons_prefix_cons, Bool.true_eq_false,
+    List.prefix_rfl, and_true, not_false_eq_true]
+
 /-
 * Theorem - The encodings of all vertices are unique.
 This is true by construction of the tree.
 -/
-theorem HfmnTree.all_codes_unique (t : HfmnTree α) : 
-    (t.vertices []).Pairwise (fun v₁ v₂ => Vertex.code v₁ ≠ Vertex.code v₂) := by
+@[simp]
+theorem HfmnTree.all_codes_distinct (t : HfmnTree α) (c : BoolList) :
+  (t.vertices c).Pairwise (fun v₁ v₂ => v₁.code ≠ v₂.code) := by
   induction t with
-  | Leaf c w =>
+  | Leaf val wt =>
     simp [vertices]
 
-  | Node l r =>
+  | Node l r ihl ihr =>
     simp [vertices]
-    rename_i ihl ihr
-    constructor
+    -- set shorter names for initial codes passed to subtrees
+    let cL := c ++ [false]
+    let cR := c ++ [true]
 
-    case left =>
-      intro v hl
-      cases hl with
-      | inl hl =>
-        have h' : Vertex.code v ∈ (l.vertices [false]).map Vertex.code := by
-          simp [List.mem_map]; exact ⟨v, hl, rfl⟩
-        simp [List.mem_map] at h'
-        by_contra hc
-        sorry
-      | inr hr' =>
-        have h': Vertex.code v ∈ (r.vertices [true]).map Vertex.code := by
-          simp [List.mem_map]; exact ⟨v, hr', rfl⟩
-        simp [List.mem_map] at h' 
-        by_contra hc
-        sorry 
+    -- Use IHs on subtrees
+    have pl := HfmnTree.all_codes_distinct l cL
+    have pr := HfmnTree.all_codes_distinct r cR
 
-    case right =>
-      sorry
+    -- Prove disjointness between left and right vertices
+    have disjoint := HfmnTree.codes_disjoint_of_nonprefix l r cL cR
+      (by exact code_ft_not_prefix c)  -- c ++ [false] is not a prefix of c ++ [true]
+      (by exact code_tf_not_prefix c) -- c ++ [true] is not a prefix of c ++ [false]
+
+    sorry
 
 /-
 * Property: The characters/values in the left and right subtrees of a node are disjoint.
