@@ -302,6 +302,16 @@ def HfmnTree.vertices : HfmnTree α → BoolList → List Vertex
 
 -- #eval HfmnTree.vertices (HfmnTree.tree eg₁) []
 
+/-
+* Theorem: The vertices of a Huffman tree are non-empty.
+-/
+theorem HfmnTree.vertices_nonempty (t : HfmnTree α) (code : BoolList) :
+  t.vertices code ≠ [] := by
+  induction t generalizing code with
+  | Leaf _ _ =>
+    simp [vertices]
+  | Node _ _ _ _ =>
+    simp [vertices]
 
 lemma HfmnTree.initialCode_in_suffix_inits (t : HfmnTree α) (given_code suffix : BoolList) :
   ∀ v ∈ t.vertices (given_code ++ suffix), given_code ∈ List.inits v.code := by
@@ -361,19 +371,50 @@ theorem HfmnTree.initialCodeIsPrefix (t : HfmnTree α) (inicode : BoolList) :
         | inr h₂ =>
           exact HfmnTree.initialCode_in_suffix_inits _ _ _ v h₂
 
-/-
-* Theorem: The vertices of a Huffman tree are non-empty.
--/
-theorem HfmnTree.vertices_nonempty (t : HfmnTree α) (code : BoolList) :
-  t.vertices code ≠ [] := by
-  induction t generalizing code with
-  | Leaf _ _ =>
-    simp [vertices]
-  | Node _ _ _ _ =>
-    simp [vertices]
- 
--- #eval HfmnTree.vertices (HfmnTree.tree eg₁)
+@[simp]
+lemma lenpref_of_pref_isprefix (c₁ c₂ : BoolList) (v : BoolList) :
+  c₁ <+: v → c₂ <+: v → c₁.length ≤ c₂.length → c₁ <+: c₂  := by
+  exact fun a a_1 a_2 ↦ List.prefix_of_prefix_length_le a a_1 a_2
 
+theorem HfmnTree.codes_disjoint_of_nonprefix 
+  (t₁ t₂ : HfmnTree α) (c₁ c₂ : BoolList)
+  (h₁ : ¬ c₁ <+: c₂) (h₂ : ¬ c₂ <+: c₁) :
+  ∀ v₁ ∈ t₁.vertices c₁, ∀ v₂ ∈ t₂.vertices c₂, Vertex.code v₁ ≠ Vertex.code v₂ := by
+  intro v₁ hv₁ v₂ hv₂
+  -- the initial codes themselves must be unequal
+  have hnc : c₁ ≠ c₂ := by
+    intro eq; apply h₁;
+    simp [eq]
+
+  -- each code of v in tree t has its prefix c
+  have p₁ := HfmnTree.initialCodeIsPrefix t₁ c₁ v₁ hv₁
+  have p₂ := HfmnTree.initialCodeIsPrefix t₂ c₂ v₂ hv₂
+
+  intro heq
+  -- if the codes are equal, then the prefixes must be equal
+  have hne₁ : c₁.isPrefixOf v₂.code := by
+    simp only [List.isPrefixOf_iff_prefix]
+    rw [← heq]
+    exact List.isPrefixOf_iff_prefix.mp p₁
+
+  have hne₂ : c₂.isPrefixOf v₁.code := by
+    simp only [List.isPrefixOf_iff_prefix]
+    rw [heq]
+    exact List.isPrefixOf_iff_prefix.mp p₂
+
+  if hl: c₁.length ≤ c₂.length then
+    have h': c₁ <+: c₂ := by
+      simp at p₁ p₂ hne₁
+      exact lenpref_of_pref_isprefix c₁ c₂ v₂.code hne₁ p₂ hl
+    contradiction 
+  else
+    have hl': c₂.length ≤ c₁.length := by
+      exact Nat.le_of_not_ge hl
+    have h': c₂ <+: c₁ := by
+      simp at p₁ p₂ hne₁
+      exact lenpref_of_pref_isprefix c₂ c₁ v₂.code p₂ hne₁ hl'
+      
+    contradiction
 /-
 * Theorem - The encodings of all vertices are unique.
 This is true by construction of the tree.
