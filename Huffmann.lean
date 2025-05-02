@@ -109,9 +109,9 @@ theorem insertionSort_preserves_length {α : Type} [Ord α] :
     simp [List.length_cons]
     assumption
 
-/- * Theorem: The insertionSorted non-empty list is non-empty -/
+/- * Lemma: The insertionSorted non-empty list is non-empty -/
 @[simp]
-theorem sorted_nonempty_is_nonempty (trees : List (HfmnTree α)) (h : trees ≠ []) :
+lemma sorted_nonempty_is_nonempty (trees : List (HfmnTree α)) (h : trees ≠ []) :
   insertionSort trees ≠ [] := by
   have h₁ : (insertionSort trees).length = trees.length := by
     apply insertionSort_preserves_length
@@ -168,9 +168,9 @@ abbrev AlphaNumTree (α : Type) := List (Alphabet α)
 def convert_input_to_alphabet (input : AlphaNumList α) : AlphaNumTree α := input.map fun a => Alphabet.mk a.1 a.2
 
 /-
-* Theorem: The conversion function `convert_input_to_alphabet` for a non-empty list is non-empty.
+* Lemma: The conversion function `convert_input_to_alphabet` for a non-empty list is non-empty.
 -/
-theorem cita_ne_to_ne (s : AlphaNumList α) (h : s ≠ []) :
+lemma cita_ne_to_ne (s : AlphaNumList α) (h : s ≠ []) :
   convert_input_to_alphabet s ≠ [] := by
   intro hi
   have h₁ : (convert_input_to_alphabet s).length = s.length := by
@@ -289,6 +289,10 @@ def Vertex.code : Vertex → BoolList
 -- #eval (Vertex.Leaf [false, true]).code
 -- #eval (Vertex.Node [false, true]).code
 
+@[simp]
+lemma Vertex_code_eq (c: BoolList): (Vertex.Node c).code = c := by
+  exact rfl
+
 /-
 The vertices of a Huffman tree are the nodes and leaves of the tree. The function returns Leaf/Node with their corresponding codes.
 -/
@@ -303,9 +307,9 @@ def HfmnTree.vertices : HfmnTree α → BoolList → List Vertex
 -- #eval HfmnTree.vertices (HfmnTree.tree eg₁) []
 
 /-
-* Theorem: The vertices of a Huffman tree are non-empty.
+* lemma: The vertices of a Huffman tree are non-empty.
 -/
-theorem HfmnTree.vertices_nonempty (t : HfmnTree α) (code : BoolList) :
+lemma HfmnTree.vertices_nonempty (t : HfmnTree α) (code : BoolList) :
   t.vertices code ≠ [] := by
   induction t generalizing code with
   | Leaf _ _ =>
@@ -316,6 +320,7 @@ theorem HfmnTree.vertices_nonempty (t : HfmnTree α) (code : BoolList) :
 /-
 * Lemma: If a vertex is in the vertices of initial code as (given_code ++ suffix), then the given_code is a prefix of the vertex code.
 -/
+@[simp]
 lemma HfmnTree.initialCode_in_suffix_inits (t : HfmnTree α) (given_code suffix : BoolList) :
   ∀ v ∈ t.vertices (given_code ++ suffix), given_code ∈ List.inits v.code := by
   intro v hv
@@ -344,6 +349,50 @@ lemma HfmnTree.initialCode_in_suffix_inits (t : HfmnTree α) (given_code suffix 
         have h' :=  ihr v h₂
         simp at h'
         exact h'
+
+/-
+* Lemma: If a vertex is in the vertices of initial code as (given_code ++ suffix), then the given_code is a prefix of the vertex code.
+-/
+@[simp]
+lemma HfmnTree.initialCode_prefix_of_code (t : HfmnTree α) (given_code suffix : BoolList) :
+  ∀ v ∈ t.vertices (given_code ++ suffix), given_code <+: v.code := by
+  have h := HfmnTree.initialCode_in_suffix_inits t given_code suffix
+  simp_all
+
+/-
+* Theorem: The length of the code of a vertex is greater than or equal to the length of the initial code.
+This is true by construction of the tree.
+-/
+@[simp]
+theorem HfmnTree.vertices_len_geq (t : HfmnTree α) (code : BoolList) :
+  ∀ v ∈ t.vertices code, v.code.length ≥ code.length := by
+  intro v hv
+  induction t with
+  -- Leaf: the only vertex has code = `code`
+  | Leaf _ _ =>
+    simp [vertices] at hv
+    cases hv with
+    | refl =>
+      simp [Vertex.code, ge_iff_le, le_refl]
+
+  | Node l r ihl ihr =>
+    simp [vertices] at hv
+    cases hv with
+    | inl hl =>
+      simp_all
+
+    | inr h =>
+      -- it lives in one of the two subtrees, with extended prefix
+      cases h with
+      -- left subtree: prefix = `code ++ [false]`
+      | inl hl =>
+        apply List.IsPrefix.length_le
+        exact initialCode_prefix_of_code l code [false] v hl 
+
+      -- right subtree: prefix = `code ++ [true]`
+      | inr hr =>
+        apply List.IsPrefix.length_le
+        exact initialCode_prefix_of_code r code [true] v hr
 
 /-
 * Theorem: The initial code of `vertices` of Huffman tree is a prefix of all the vertex code of the tree.
@@ -472,7 +521,15 @@ theorem HfmnTree.all_codes_distinct (t : HfmnTree α) (c : BoolList) :
       (by exact code_ft_not_prefix c)  -- c ++ [false] is not a prefix of c ++ [true]
       (by exact code_tf_not_prefix c) -- c ++ [true] is not a prefix of c ++ [false]
 
-    sorry
+    constructor
+    case left =>
+      intro v₁ hv v₃ 
+      cases hv with
+      | inl hl =>
+        sorry
+      sorry
+    case right =>
+      sorry
 
 /-
 * Property: The characters/values in the left and right subtrees of a node are disjoint.
