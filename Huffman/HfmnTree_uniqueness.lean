@@ -281,4 +281,10 @@ theorem HfmnTree.all_codes_distinct (t : HfmnTree α) (c : BoolList) :
         simp at lv₁
 
     case right =>
-      sorry
+      apply List.pairwise_append.2
+      constructor
+      · exact pl
+      · -- right case
+        constructor
+        · exact pr
+        · exact disjoint
