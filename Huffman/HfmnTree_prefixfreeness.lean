@@ -1,4 +1,9 @@
-import Huffman.HuffmanTree
+import Huffman.HfmnTree_uniqueness
+
+variable {α : Type} [DecidableEq α] [Inhabited α] [Ord α] [HfmnType α]
+
+instance [Inhabited α] [DecidableEq α] : HfmnType α where
+  default := default
 /-
 * Property: The characters/values in the left and right subtrees of a node are disjoint.
 -/
@@ -62,13 +67,12 @@ def prefixFreeTree (huffinput : AlphaNumList α) : Prop :=
 
 -- #eval isPrefixfree (conv_str_freq_boollist [('a', "0"),('b', "101"),('c', "100"),('d', "011"),('e', "1101"),('f', "1100")]) -- false
 
-
 /-
 * Theorem: The Huffman tree is prefix-free.
 -/
-theorem HfmnTree.hfmntree_is_prefix_free (t : HfmnTree α) :
-  (t.vertices []).Pairwise (fun v₁ v₂ => v₁ ≠ v₂ → checkPrefixfree v₁.code v₂.code) := by
-  induction t with
+theorem HfmnTree.hfmntree_is_prefix_free (t : HfmnTree α) (c : BoolList) :
+  (t.vertices c).Pairwise (fun v₁ v₂ => checkPrefixfree v₁.code v₂.code) := by
+  induction p:t with
   | Leaf c w =>
     simp [vertices]
   | Node l r code =>
@@ -77,18 +81,48 @@ theorem HfmnTree.hfmntree_is_prefix_free (t : HfmnTree α) :
     constructor
 
     case left =>
-      intro v hl hr
+      intro v hl
       cases hl with
       | inl hl =>
-        have h': Vertex.code v ∈ (l.vertices [false]).map Vertex.code := by
-          simp [List.mem_map]; exact ⟨v, hl, rfl⟩
-        simp [List.mem_map] at h'
-        sorry
+        unfold checkPrefixfree
+        simp only [ne_eq, List.isPrefixOf_iff_prefix, not_or, Bool.decide_and, decide_not,
+          Bool.and_eq_true, Bool.not_eq_eq_eq_not, Bool.not_true, decide_eq_false_iff_not]
+        constructor
+        case left =>
+          have vl : (v.code).length ≥ (c++[false]).length := by
+            exact vertices_len_geq l (c ++ [false]) v hl
+          have vl₁ : (v.code).length > c.length := by 
+            calc
+              (v.code).length ≥ (c ++ [false]).length := by assumption
+                            _ ≥ c.length + 1 := by simp
+                            _ > c.length := by linarith
+            
+          by_contra vc
+          have vl₂ : (v.code).length = c.length := by simp [vc]
+          rw [vl₂] at vl₁
+          exact (lt_self_iff_false (List.length c)).mp vl₁ 
+        case right =>
+          have pc : List.isPrefixOf (c ++ [false]) v.code := by
+            exact initialCodeIsPrefix l (c ++ [false]) v hl
+          simp at pc
+          constructor
+          · by_contra vc
+            sorry
+          · by_contra vc
+            have vl : (v.code).length > c.length := by
+              have vl' : (v.code).length ≥ (c ++ [false]).length := by
+                exact vertices_len_geq l (c ++ [false]) v hl
+              calc
+                (v.code).length ≥ (c ++ [false]).length := by assumption
+                              _ > c.length := by simp
+            have vl₁ : (v.code).length ≤ c.length := by
+              exact List.IsPrefix.length_le vc
+            have vl₂ : ¬ (v.code).length > c.length := by
+              exact Nat.not_lt.mpr vl₁
+            contradiction
         
-      | inr hr' =>
-        have h': Vertex.code v ∈ (r.vertices [true]).map Vertex.code := by
-          simp [List.mem_map]; exact ⟨v, hr', rfl⟩
-        simp [List.mem_map] at h' 
+      | inr hr =>
+
         sorry
 
     case right =>
