@@ -51,6 +51,19 @@ lemma HfmnTree.vertices_nonempty (t : HfmnTree α) (code : BoolList) :
   | Node _ _ _ _ =>
     simp [vertices]
 
+@[simp]
+theorem HfmnTree.vertices_len_finite (t : HfmnTree α) (c : BoolList) :
+  ∃ n : ℕ, (t.vertices c).length < n := by
+  induction t with
+  | Leaf _ _ =>
+    -- A single leaf has exactly one vertex, so pick n = 1 + 1 = 2
+    use 2
+    simp [vertices]
+
+  | Node l r ihl ihr =>
+    simp [vertices]
+    exact exists_gt ((l.vertices (c ++ [false])).length + (r.vertices (c ++ [true])).length + 1)
+
 /-
 * Lemma: If a vertex is in the vertices of initial code as (given_code ++ suffix), then the given_code is a prefix of the vertex code.
 -/
@@ -93,6 +106,18 @@ lemma HfmnTree.initialCode_prefix_of_code (t : HfmnTree α) (given_code suffix :
   have h := HfmnTree.initialCode_in_suffix_inits t given_code suffix
   simp_all
 
+@[simp]
+lemma HfmnTree.eq_suffix_eq_length (t: HfmnTree α ) (given_code : BoolList) :
+  (t.vertices (given_code ++ [true])).length = (t.vertices (given_code ++ [false])).length := by
+  have eq: (given_code ++ [true]).length = (given_code ++ [false]).length := by
+    simp only [List.length_append, List.length_cons, List.length_nil, zero_add]
+  induction t with
+  | Leaf _ _ =>
+    simp [vertices]
+  | Node l r ihl ihr =>
+    simp [vertices]
+    simp_all
+    sorry
 /-
 * Theorem: The length of the code of a vertex is greater than or equal to the length of the initial code.
 This is true by construction of the tree.
@@ -127,6 +152,33 @@ theorem HfmnTree.vertices_len_geq (t : HfmnTree α) (code : BoolList) :
       | inr hr =>
         apply List.IsPrefix.length_le
         exact initialCode_prefix_of_code r code [true] v hr
+
+
+@[simp]
+theorem HfmnTree.left_vertices_smaller (t : HfmnTree α) (c : BoolList) (b : Bool) :
+  (match t with
+   | HfmnTree.Leaf _ _   => 0
+   | HfmnTree.Node l r   => (l.vertices (c ++ [b])).length) < (t.vertices c).length := by
+  induction t with
+  | Leaf _ _ =>
+    simp [vertices]
+  | Node l r ihl ihr =>
+    simp [vertices]
+    cases b
+    case false =>
+      -- Goal: (l.vertices (c ++ [false])).length < left + right + 1
+      let left_len := (l.vertices (c ++ [false])).length
+      let right_len := (r.vertices (c ++ [true])).length
+      linarith
+    case true =>
+      -- Goal: (l.vertices (c ++ [true])).length < left + right + 1
+      -- But this is r.vertices really (misleading naming from match!)
+      let left_len := (l.vertices (c ++ [false])).length
+      let right_len := (r.vertices (c ++ [true])).length
+      have hl: left_len < left_len + 1 + right_len := by
+        linarith
+      simp [hl]
+      linarith
 
 /-
 * Theorem: The initial code of `vertices` of Huffman tree is a prefix of all the vertex code of the tree.
@@ -247,7 +299,7 @@ theorem HfmnTree.all_codes_distinct (t : HfmnTree α) (c : BoolList) :
     -- Use IHs on subtrees
     have pl := HfmnTree.all_codes_distinct l cL
     have pr := HfmnTree.all_codes_distinct r cR
-
+      
     -- Prove disjointness between left and right vertices
     have disjoint := HfmnTree.codes_disjoint_of_nonprefix l r cL cR
       (by exact code_ft_not_prefix c)  -- c ++ [false] is not a prefix of c ++ [true]
@@ -288,3 +340,4 @@ theorem HfmnTree.all_codes_distinct (t : HfmnTree α) (c : BoolList) :
         constructor
         · exact pr
         · exact disjoint
+termination_by (t.vertices c).length
