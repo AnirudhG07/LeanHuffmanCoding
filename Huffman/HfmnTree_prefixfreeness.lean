@@ -44,9 +44,7 @@ lemma List.eq_suff_eq_len ( c: BoolList) :
     simp only [length_append, length_cons, length_nil, zero_add]
   rw [hc₁, hc₂]
 
-/-
-* Lemma: Equal length prefix of the same list are equal
--/
+
 @[simp]
 lemma List.prefix_eqlen_eq (l₁ l₂ bl : BoolList) :
   l₁.length = l₂.length → l₁.isPrefixOf bl → l₂.isPrefixOf bl → l₁ = l₂ := by
@@ -74,7 +72,11 @@ lemma List.prefix_eqlen_eq (l₁ l₂ bl : BoolList) :
           simp_all
       have tail_eq : xs = ys := by
         simp_all
-        sorry   
+        have hp₁' : [y] ++ ys <+: bl := by
+          exact hp₂
+        have hp₂' : [y] ++ xs <+: bl := by
+          exact hp₁
+        sorry
       
       apply cons_eq_cons.mpr
       constructor
