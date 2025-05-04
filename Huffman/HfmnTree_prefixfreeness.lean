@@ -49,26 +49,38 @@ lemma List.eq_suff_eq_len ( c: BoolList) :
 -/
 @[simp]
 lemma List.prefix_eqlen_eq (l₁ l₂ bl : BoolList) :
-  l₁.length = l₂.length → l₁ <+: bl → l₂ <+: bl → l₁ = l₂ := by
+  l₁.length = l₂.length → l₁.isPrefixOf bl → l₂.isPrefixOf bl → l₁ = l₂ := by
   intro hlen hp₁ hp₂
   -- unpack the prefixes into `bl = l₁ ++ s₁` and `bl = l₂ ++ s₂`
-  induction l₁ generalizing l₂ bl with
+  induction p:l₁ with
   | nil =>
     have : l₂ = [] := by
-      exact eq_nil_iff_length_eq_zero.mpr (id (Eq.symm hlen))
+      have : l₂.length = 0 := by
+        rw [← hlen]; exact eq_nil_iff_length_eq_zero.mp p 
+      exact eq_nil_iff_length_eq_zero.mpr this
     simp [this]
   | cons x xs ih =>
     -- Both lists must be non-empty since length > 0
-    match l₂ with
+    match q:l₂ with
     | nil => 
-      simp at hlen  -- Contradiction since lengths don't match
-    | cons y ys =>
-      -- Extract the first elements
-      cases hp₁ with | intro h₁t h₁r =>
-      cases hp₂ with | intro h₂t h₂r =>
-      -- First elements must be equal
+      simp at hlen 
+      rw [p] at hlen; assumption
+     | cons y ys =>
+      have head_eq : x = y := by
+        cases bl with
+        | nil => 
+          simp at hp₁ hp₂
+        | cons b bs =>
+          simp_all
+      have tail_eq : xs = ys := by
+        simp_all
+        sorry   
+      
+      apply cons_eq_cons.mpr
+      constructor
+      · assumption
+      · assumption
 
-      sorry 
  
 /-
 * Theorem: The Huffman tree is prefix-free.
