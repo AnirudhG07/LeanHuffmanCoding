@@ -51,6 +51,9 @@ lemma HfmnTree.vertices_nonempty (t : HfmnTree α) (code : BoolList) :
   | Node _ _ _ _ =>
     simp [vertices]
 
+/-
+* Theorem: The vertices of a Huffman tree are finite.
+-/
 @[simp]
 theorem HfmnTree.vertices_len_finite (t : HfmnTree α) (c : BoolList) :
   ∃ n : ℕ, (t.vertices c).length < n := by

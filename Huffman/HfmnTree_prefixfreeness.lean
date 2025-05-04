@@ -44,6 +44,9 @@ lemma List.eq_suff_eq_len ( c: BoolList) :
     simp only [length_append, length_cons, length_nil, zero_add]
   rw [hc₁, hc₂]
 
+/-
+* Lemma - Two lists of equal length and prefix of the same list are equal.
+-/
 lemma List.prefix_eqlen_eq_n (n : ℕ) : ∀ (l₁ l₂ bl : BoolList),
   l₁.length = n → l₂.length = n → l₁.isPrefixOf bl → l₂.isPrefixOf bl → l₁ = l₂ := by
     induction n with
@@ -69,6 +72,10 @@ lemma List.prefix_eqlen_eq_n (n : ℕ) : ∀ (l₁ l₂ bl : BoolList),
           simp only [cons.injEq, true_and]
           exact ih as₁ as₂ bs hlength₁ hlength₂ hpref₁' hpref₂'
 
+/-
+* Lemma - Two lists of equal length and prefix of the same list are equal.
+Simplified version of the above lemma.
+-/
 lemma List.prefix_eqlen_eq (l₁ l₂ bl : BoolList) :
   l₁.length = l₂.length → l₁.isPrefixOf bl → l₂.isPrefixOf bl → l₁ = l₂ := by
     have h := prefix_eqlen_eq_n l₁.length l₁ l₂ bl
