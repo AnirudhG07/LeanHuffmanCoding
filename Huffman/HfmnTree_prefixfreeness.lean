@@ -44,45 +44,37 @@ lemma List.eq_suff_eq_len ( c: BoolList) :
     simp only [length_append, length_cons, length_nil, zero_add]
   rw [hc₁, hc₂]
 
+lemma List.prefix_eqlen_eq_n (n : ℕ) : ∀ (l₁ l₂ bl : BoolList),
+  l₁.length = n → l₂.length = n → l₁.isPrefixOf bl → l₂.isPrefixOf bl → l₁ = l₂ := by
+    induction n with
+    | zero =>
+      intro l₁ l₂ bl hlength₁ hlength₂ hpref₁ hpref₂
+      rw [length_eq_zero_iff] at hlength₁ hlength₂
+      rw [hlength₁, hlength₂]
+    | succ m ih =>
+      intro l₁ l₂ bl hlength₁ hlength₂ hpref₁ hpref₂
+      match bl with
+      | [] => simp_all
+      | b :: bs =>
+        match l₁, l₂ with
+        | [], _ => simp at hlength₁
+        | _, [] => simp at hlength₂
+        | a₁ :: as₁, a₂ :: as₂ =>
+          simp only [length_cons, Nat.add_left_inj] at hlength₁ hlength₂
+          unfold isPrefixOf at hpref₁ hpref₂
+          simp only [Bool.and_eq_true, beq_iff_eq] at hpref₁ hpref₂
+          obtain ⟨heq₁, hpref₁'⟩ := hpref₁
+          obtain ⟨heq₂, hpref₂'⟩ := hpref₂
+          rw [heq₁, heq₂]
+          simp only [cons.injEq, true_and]
+          exact ih as₁ as₂ bs hlength₁ hlength₂ hpref₁' hpref₂'
 
-@[simp]
 lemma List.prefix_eqlen_eq (l₁ l₂ bl : BoolList) :
   l₁.length = l₂.length → l₁.isPrefixOf bl → l₂.isPrefixOf bl → l₁ = l₂ := by
-  intro hlen hp₁ hp₂
-  -- unpack the prefixes into `bl = l₁ ++ s₁` and `bl = l₂ ++ s₂`
-  induction p:l₁ with
-  | nil =>
-    have : l₂ = [] := by
-      have : l₂.length = 0 := by
-        rw [← hlen]; exact eq_nil_iff_length_eq_zero.mp p 
-      exact eq_nil_iff_length_eq_zero.mpr this
-    simp [this]
-  | cons x xs ih =>
-    -- Both lists must be non-empty since length > 0
-    match q:l₂ with
-    | nil => 
-      simp at hlen 
-      rw [p] at hlen; assumption
-     | cons y ys =>
-      have head_eq : x = y := by
-        cases bl with
-        | nil => 
-          simp at hp₁ hp₂
-        | cons b bs =>
-          simp_all
-      have tail_eq : xs = ys := by
-        simp_all
-        have hp₁' : [y] ++ ys <+: bl := by
-          exact hp₂
-        have hp₂' : [y] ++ xs <+: bl := by
-          exact hp₁
-        sorry
-      
-      apply cons_eq_cons.mpr
-      constructor
-      · assumption
-      · assumption
-
+    have h := prefix_eqlen_eq_n l₁.length l₁ l₂ bl
+    simp only [forall_const] at h
+    rw [Eq.comm]
+    exact h
  
 /-
 * Theorem: The Huffman tree is prefix-free.
@@ -113,11 +105,10 @@ theorem HfmnTree.hfmntree_is_prefix_free (t : HfmnTree α) (c : BoolList) :
         simp only [List.isPrefixOf_iff_prefix, Bool.decide_and, decide_not, Bool.and_eq_true,
           Bool.not_eq_eq_eq_not, Bool.not_true, decide_eq_false_iff_not]
         
-        have pr₁: ( c++ [false]).isPrefixOf v₁.code := by
+        have pr₁: (c++ [false]).isPrefixOf v₁.code := by
           exact initialCodeIsPrefix l cL v₁ hv₁
-        have pr₂: ( c++ [true]).isPrefixOf v₂.code := by
+        have pr₂: (c++ [true]).isPrefixOf v₂.code := by
           exact initialCodeIsPrefix r cR v₂ hv₂ 
-        simp at pr₁ pr₂
         have cleq : cL.length = cR.length := by
           exact Eq.symm (List.eq_suff_eq_len c)
         have cneq : ¬ cL = cR := by
@@ -127,14 +118,16 @@ theorem HfmnTree.hfmntree_is_prefix_free (t : HfmnTree α) (c : BoolList) :
 
         constructor
         · intro h₁
-          have h' : (c ++ [false]) <+: v₂.code := by
+          have h' : (c ++ [false]).isPrefixOf v₂.code := by
+            simp_all
             exact List.IsPrefix.trans pr₁ h₁
           have ceq : cL = cR := by
             exact List.prefix_eqlen_eq cL cR v₂.code cleq h' pr₂
           contradiction
             
         · intro h₂
-          have h' : (c ++ [true]) <+: v₁.code := by
+          have h' : (c ++ [true]).isPrefixOf v₁.code := by
+            simp_all
             exact List.IsPrefix.trans pr₂ h₂
           have ceq : cL = cR := by
             exact List.prefix_eqlen_eq cL cR v₁.code cleq pr₁ h'
