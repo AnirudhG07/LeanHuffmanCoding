@@ -23,14 +23,14 @@ def Vertex.code : Vertex → BoolList
 -- #eval (Vertex.Leaf [false, true]).code
 -- #eval (Vertex.Node [false, true]).code
 
-@[simp, grind .]
+@[simp]
 lemma Vertex_code_eq (c: BoolList): (Vertex.Node c).code = c := by
   exact rfl
 
 /-
 The vertices of a Huffman tree are the nodes and leaves of the tree. The function returns Leaf/Node with their corresponding codes.
 -/
-@[simp, grind .]
+@[simp]
 def HfmnTree.vertices : HfmnTree α → BoolList → List Vertex
   | .Leaf _ _, code => [Vertex.Leaf code]
   | .Node l r, code =>
@@ -43,7 +43,6 @@ def HfmnTree.vertices : HfmnTree α → BoolList → List Vertex
 /-
 * lemma: The vertices of a Huffman tree are non-empty.
 -/
-@[simp, grind .]
 lemma HfmnTree.vertices_nonempty (t : HfmnTree α) (code : BoolList) :
   t.vertices code ≠ [] := by
   induction t generalizing code with
@@ -71,7 +70,7 @@ theorem HfmnTree.vertices_len_finite (t : HfmnTree α) (c : BoolList) :
 /-
 * Lemma: If a vertex is in the vertices of initial code as (given_code ++ suffix), then the given_code is a prefix of the vertex code.
 -/
-@[simp, grind .]
+@[simp]
 lemma HfmnTree.initialCode_in_suffix_inits (t : HfmnTree α) (given_code suffix : BoolList) :
   ∀ v ∈ t.vertices (given_code ++ suffix), given_code ∈ List.inits v.code := by
   intro v hv
@@ -81,14 +80,15 @@ lemma HfmnTree.initialCode_in_suffix_inits (t : HfmnTree α) (given_code suffix 
     simp [vertices] at hv
     cases hv with
     | refl =>
-      simp only [Vertex.code, List.prefix_append]
+      simp only [Vertex.code, List.inits, List.prefix_rfl, List.prefix_append]
   | Node l r =>
     have ihl := initialCode_in_suffix_inits l given_code (suffix ++ [false])
     have ihr := initialCode_in_suffix_inits r given_code (suffix ++ [true])
     simp [vertices] at hv
     cases hv with
     | inl h₁ =>
-      grind
+      rw [h₁]
+      simp [Vertex.code]
     | inr h₃  =>
       cases h₃ with
       | inl h₁ =>
@@ -103,7 +103,7 @@ lemma HfmnTree.initialCode_in_suffix_inits (t : HfmnTree α) (given_code suffix 
 /-
 * Lemma: If a vertex is in the vertices of initial code as (given_code ++ suffix), then the given_code is a prefix of the vertex code.
 -/
-@[simp, grind .]
+@[simp]
 lemma HfmnTree.initialCode_prefix_of_code (t : HfmnTree α) (given_code suffix : BoolList) :
   ∀ v ∈ t.vertices (given_code ++ suffix), given_code <+: v.code := by
   have h := HfmnTree.initialCode_in_suffix_inits t given_code suffix
@@ -113,7 +113,7 @@ lemma HfmnTree.initialCode_prefix_of_code (t : HfmnTree α) (given_code suffix :
 * Theorem: The length of the code of a vertex is greater than or equal to the length of the initial code.
 This is true by construction of the tree.
 -/
-@[simp, grind .]
+@[simp]
 theorem HfmnTree.vertices_len_geq (t : HfmnTree α) (code : BoolList) :
   ∀ v ∈ t.vertices code, v.code.length ≥ code.length := by
   intro v hv
@@ -160,7 +160,21 @@ theorem HfmnTree.initialCodeIsPrefix (t : HfmnTree α) (inicode : BoolList) :
 
   | Node l r =>
     simp [vertices] at hv
-    grind
+    rename_i ihl ihr
+    cases hv with
+    | inl hl =>
+        apply (List.mem_inits inicode v.code).mp
+        rw [hl]
+        simp only [Vertex.code, List.mem_inits, List.prefix_rfl]
+
+    | inr hr =>
+        apply (List.mem_inits inicode v.code).mp
+        cases hr with
+        | inl h₁ =>
+          exact HfmnTree.initialCode_in_suffix_inits _ _ _ v h₁
+        | inr h₂ =>
+          exact HfmnTree.initialCode_in_suffix_inits _ _ _ v h₂
+
 /-
 * Lemma: If two codes are prefixes of a code, and one has lesser length, then that is prefix of the other.
 -/
@@ -178,14 +192,19 @@ theorem HfmnTree.codes_disjoint_of_nonprefix
   ∀ v₁ ∈ t₁.vertices c₁, ∀ v₂ ∈ t₂.vertices c₂, Vertex.code v₁ ≠ Vertex.code v₂ := by
   intro v₁ hv₁ v₂ hv₂ heq
   -- the initial codes themselves must be unequal
-  have hnc : c₁ ≠ c₂ := by grind
+  have hnc : c₁ ≠ c₂ := by
+    intro eq; apply h₁;
+    simp [eq]
 
   -- each code of v in tree t has its prefix c
   have p₁ := HfmnTree.initialCodeIsPrefix t₁ c₁ v₁ hv₁
   have p₂ := HfmnTree.initialCodeIsPrefix t₂ c₂ v₂ hv₂
 
   -- if the codes are equal, then the prefixes must be equal
-  have hne₁ : c₁.isPrefixOf v₂.code := by grind
+  have hne₁ : c₁.isPrefixOf v₂.code := by
+    simp only [List.isPrefixOf_iff_prefix]
+    rw [← heq]
+    exact List.isPrefixOf_iff_prefix.mp p₁
 
   if hl: c₁.length ≤ c₂.length then
     have h': c₁ <+: c₂ := by
@@ -204,21 +223,24 @@ theorem HfmnTree.codes_disjoint_of_nonprefix
 /-
 * Lemma: For any boolean list c, c ++ [false] is not a prefix of c ++ [true].
 -/
-@[simp, grind .]
+@[simp]
 lemma code_ft_not_prefix (c : BoolList) : ¬ c ++ [false] <+: c ++ [true] := by
   intro h
-  have h₁ : (c ++ [false]).length = (c ++ [true]).length := by grind
+  have h₁ : (c ++ [false]).length = (c ++ [true]).length := by
+    simp only [List.length_append, List.length_cons, List.length_nil, zero_add]
   have h₂ : c ++ [true] = c ++ [false] := by
     exact Eq.symm (List.IsPrefix.eq_of_length h h₁)
   have h₃ : c ++ [false] ≠ c ++ [true] := by
-    simp only [ne_eq, List.append_cancel_left_eq, List.cons.injEq, Bool.false_eq_true, and_true,not_false_eq_true]
-  grind
+    simp only [ne_eq, List.append_cancel_left_eq, List.cons.injEq, Bool.false_eq_true, and_true,
+      not_false_eq_true]
+  simp at h₂
 
 @[simp]
 lemma code_tf_not_prefix (c : BoolList) : ¬ c ++ [true] <+: c ++ [false] := by
   have h: ¬ c ++ [false] <+: c ++ [true] := by
     exact code_ft_not_prefix c
-  simp only [List.prefix_append_right_inj, List.cons_prefix_cons, Bool.true_eq_false, List.prefix_rfl, and_true, not_false_eq_true]
+  simp only [List.prefix_append_right_inj, List.cons_prefix_cons, Bool.true_eq_false,
+    List.prefix_rfl, and_true, not_false_eq_true]
 
 /-
 * Theorem - The encodings of all vertices are unique.
@@ -228,7 +250,8 @@ This is true by construction of the tree.
 theorem HfmnTree.all_codes_distinct (t : HfmnTree α) (c : BoolList) :
   (t.vertices c).Pairwise (fun v₁ v₂ => v₁.code ≠ v₂.code) := by
   induction p:t with
-  | Leaf val wt => grind
+  | Leaf val wt =>
+    simp [vertices]
 
   | Node l r ihl ihr =>
     simp [vertices]
@@ -253,15 +276,31 @@ theorem HfmnTree.all_codes_distinct (t : HfmnTree α) (c : BoolList) :
         have lv₁ : (v₁.code).length > c.length := by
           have lv' : (v₁.code).length ≥ (c ++ [false]).length := by
              exact HfmnTree.vertices_len_geq l cL v₁ hl
-          grind
-        grind
+          have lv'' : (c ++ [false]).length = c.length + 1 := by
+            simp only [List.length_append, List.length_cons, List.length_nil, zero_add]
+          linarith
+        have lv₂ : (v₁.code).length = c.length := by
+          exact congrArg List.length (id (Eq.symm v₃))
+        rw [lv₂] at lv₁
+        simp at lv₁
       | inr hr =>
         have lv₁ : (v₁.code).length > c.length := by
           have lv' : (v₁.code).length ≥ (c ++ [true]).length := by
              exact HfmnTree.vertices_len_geq r cR v₁ hr
-          grind
-        grind
+          have lv'' : (c ++ [true]).length = c.length + 1 := by
+            simp only [List.length_append, List.length_cons, List.length_nil, zero_add]
+          linarith
+        have lv₂ : (v₁.code).length = c.length := by
+          exact congrArg List.length (id (Eq.symm v₃))
+        rw [lv₂] at lv₁
+        simp at lv₁
 
     case right =>
-      grind
+      apply List.pairwise_append.2
+      constructor
+      · exact pl
+      · -- right case
+        constructor
+        · exact pr
+        · exact disjoint
 termination_by (t.vertices c).length

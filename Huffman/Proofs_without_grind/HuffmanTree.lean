@@ -18,7 +18,7 @@ abbrev AlphaNumList (α : Type) := List (α × Nat)
 abbrev BoolEncList (α : Type) := List (α × BoolList)
 abbrev TypeEncodedList (α : Type) := List (α × String)
 
-/-
+/- 
 Defined a Typeclass for the type of the inputs in the Huffman tree. Since decoding would be primarlity on strings or integer inputs, they are all decidable, ordered and inhabited.
 -/
 class HfmnType (α : Type) [DecidableEq α]  where
@@ -78,8 +78,8 @@ theorem orderedInsert_nonempty {α : Type} [Ord α] (a : α) (l : List α) :
   | nil => simp [orderedInsert]
   | cons b t ih =>
     simp [orderedInsert]
-    grind
-
+    split <;> simp [List.length, ih, Nat.zero_lt_succ]
+    
 /- * Theorem: The length of the list after inserting an element is equal to the original length plus one.-/
 theorem orderedInsert_inc_length {α : Type} [Ord α] (a : α) (l : List α) :
   (orderedInsert a l).length = l.length + 1 := by
@@ -87,8 +87,8 @@ theorem orderedInsert_inc_length {α : Type} [Ord α] (a : α) (l : List α) :
   | nil => simp [orderedInsert]
   | cons h t ih =>
     simp [orderedInsert]
-    grind
-
+    split <;> simp [ih]
+    
 /- Insertion sort function that sorts a list of elements so that the elements are in non-decreasing order.-/
 def insertionSort : List α → List α
   | [] => []
@@ -103,12 +103,14 @@ theorem insertionSort_preserves_length {α : Type} [Ord α] :
   induction l with
   | nil => simp [insertionSort]
   | cons b l ih =>
-    simp [insertionSort]
+    simp [insertionSort, ih]
     have h := orderedInsert_inc_length b (insertionSort l)
-    grind
+    rw [h]
+    simp [List.length_cons]
+    assumption
 
 /- * Lemma: The insertionSorted non-empty list is non-empty -/
-@[simp, grind .]
+@[simp]
 lemma sorted_nonempty_is_nonempty (trees : List (HfmnTree α)) (h : trees ≠ []) :
   insertionSort trees ≠ [] := by
   have h₁ : (insertionSort trees).length = trees.length := by
@@ -119,20 +121,20 @@ lemma sorted_nonempty_is_nonempty (trees : List (HfmnTree α)) (h : trees ≠ []
   simp [List.ne_nil_of_length_pos, h₂]
 
 
-def String.freq(s : String) (c : Char) := s.toList.filter (· == c) |>.length
+def String.freq(s : String) (c : Char) := s.data.filter (· == c) |>.length
 -- #eval "hello".freq 'l' --2
 
 /-
 If t1 t2 is either Leaf or Node, when merged, it will be a Node.
 -/
-@[simp, grind .]
+@[simp]
 def HfmnTree.mergeTrees (t1 t2 : HfmnTree α) : HfmnTree α :=
-  .Node t1 t2
+  .Node t1 t2 
 
 /-
 In our algorithm, we take the mininum two trees and merge them. The merged tree is then inserted back into the list of trees.
 -/
-@[simp, grind .]
+@[simp]
 def HfmnTree.merge (trees : List (HfmnTree α)) (h : trees ≠ []) : HfmnTree α :=
   let sorted := insertionSort trees
   have hp : sorted ≠ [] := by
@@ -146,7 +148,8 @@ def HfmnTree.merge (trees : List (HfmnTree α)) (h : trees ≠ []) : HfmnTree α
     let newTree := .mergeTrees t1 t2
     have : rest.length + 1 < trees.length := by
       have h₁ : sorted.length = trees.length := by apply insertionSort_preserves_length
-      grind
+      rw [← h₁]
+      simp [p]
     HfmnTree.merge (newTree :: rest) (by simp)
 termination_by trees.length
 
@@ -177,7 +180,8 @@ lemma cita_ne_to_ne (s : AlphaNumList α) (h : s ≠ []) :
   have h₃ : (convert_input_to_alphabet s).length > 0 := by
     rw [h₁]
     exact List.length_pos_iff.mpr h
-  grind
+  rw [h₂] at h₃
+  exact Nat.lt_irrefl 0 h₃
 
 /-
 The main Tree creator function which takes the input and returns the Huffman tree, with the encoded BoolList included.
@@ -186,7 +190,7 @@ def HfmnTree.tree (huffinput : AlphaNumList α) : HfmnTree α :=
   if p:huffinput.isEmpty then -- Handle []
     HfmnTree.Leaf HfmnType.default 0
   else
-    have huffinput_nonempty : huffinput ≠ [] := by intro h₁; rw [h₁] at p; simp at p
+    have huffinput_nonempty : huffinput ≠ [] := by intro h₁; rw [h₁] at p; simp at p        
 
     let input := convert_input_to_alphabet huffinput
     have hi : input ≠ [] := by
@@ -199,19 +203,24 @@ def HfmnTree.tree (huffinput : AlphaNumList α) : HfmnTree α :=
       have h₁ : (leaves).length = (input).length := by
         apply List.length_map
       have h₂ : (leaves).length = 0 := by
-        exact List.eq_nil_iff_length_eq_zero.mp h
+        exact List.eq_nil_iff_length_eq_zero.mp h 
       have h₃ : (leaves).length > 0 := by
         rw [h₁]
-        simp [List.length_pos_iff, hi]
-      grind
+        simp [List.length, huffinput_nonempty, List.length_pos_iff, hi]
+      rw [h₂] at h₃
+      exact Nat.lt_irrefl 0 h₃
+
     let sorted := insertionSort leaves
-    have sorted_nonempty : sorted ≠ [] := by grind
+        
+    have sorted_nonempty : sorted ≠ [] := by
+      apply sorted_nonempty_is_nonempty
+      exact hl
 
     let sorted_tree := HfmnTree.merge sorted (by simp [sorted_nonempty] )
     sorted_tree
 
 -- #eval HfmnTree.tree eg₁
-
+    
 /- Returns the set of values in the tree. -/
 def HfmnTree.chars: HfmnTree α → List α
   | Leaf c _  => [c]
@@ -247,20 +256,20 @@ def HfmnTree.encodedList (huffinput : AlphaNumList α) : BoolEncList α :=
 --   ('c', [true, false, false]),
 --   ('d', [true, true, true]),
 --   ('e', [true, true, false, true]),
---   ('f', [true, true, false, false])]
+--   ('f', [true, true, false, false])]  
 
 /-
 The leastEncodedData function calculates the total number of bits used to encode the input data using the Huffman tree. It multiplies the length of each code by its frequency and sums them up.
 -/
 def Huffman.leastEncodedData (huffinput : AlphaNumList α) : Nat :=
   let encoded := HfmnTree.encodedList huffinput
-  huffinput.foldl (fun acc (a, count) =>
+  huffinput.foldl (fun acc (a, count) => 
     match encoded.find? (fun (x, _) => x == a) with
     | some (_, code) => acc + code.length * count
     | none => acc  -- or handle missing case as needed
   ) 0
 
--- #eval Huffman.leastEncodedData eg₁ -- 224
+-- #eval Huffman.leastEncodedData eg₁ -- 224 
 
 /-
 Decoding the encoded input. decode(encode(x)) = x, since the tree is prefix free and the code is unique.

@@ -6,7 +6,7 @@ instance [Inhabited α] [DecidableEq α] : HfmnType α where
   default := default
 
 /- Check is a vertex is Leaf or not -/
-@[simp, grind .]
+@[simp]
 def Vertex.isLeaf (v : Vertex) : Bool :=
   match v with
   | Vertex.Leaf _ => true
@@ -15,7 +15,7 @@ def Vertex.isLeaf (v : Vertex) : Bool :=
 /-
 This function returns the list of vertices of a Huffman tree that are leaves.
 -/
-@[simp, grind .]
+@[simp]
 def HfmnTree.leaves (t : HfmnTree α) (code : BoolList) : List Vertex :=
   (t.vertices code).filter (fun v => v.isLeaf)
 
@@ -35,9 +35,14 @@ def checkPrefixfree (bl₁ bl₂: BoolList) : Bool :=
 
 -- #eval checkPrefixfree [true, false, false] [true, false] -- false
 
-@[simp, grind .]
+@[simp]
 lemma List.eq_suff_eq_len ( c: BoolList) :
-  (c ++ [true]).length = (c ++ [false]).length := by grind
+  (c ++ [true]).length = (c ++ [false]).length := by
+  have hc₁ : (c++[true]).length = c.length +1 := by
+    simp only [length_append, length_cons, length_nil, zero_add]
+  have hc₂ : (c++[false]).length = c.length +1 := by
+    simp only [length_append, length_cons, length_nil, zero_add]
+  rw [hc₁, hc₂]
 
 /-
 * Lemma - Two lists of equal length and prefix of the same list are equal.
@@ -48,7 +53,7 @@ lemma List.prefix_eqlen_eq_n (n : ℕ) : ∀ (l₁ l₂ bl : BoolList),
     | zero =>
       intro l₁ l₂ bl hlength₁ hlength₂ hpref₁ hpref₂
       rw [length_eq_zero_iff] at hlength₁ hlength₂
-      grind
+      rw [hlength₁, hlength₂]
     | succ m ih =>
       intro l₁ l₂ bl hlength₁ hlength₂ hpref₁ hpref₂
       match bl with
@@ -58,17 +63,26 @@ lemma List.prefix_eqlen_eq_n (n : ℕ) : ∀ (l₁ l₂ bl : BoolList),
         | [], _ => simp at hlength₁
         | _, [] => simp at hlength₂
         | a₁ :: as₁, a₂ :: as₂ =>
-          grind
+          simp only [length_cons, Nat.add_left_inj] at hlength₁ hlength₂
+          unfold isPrefixOf at hpref₁ hpref₂
+          simp only [Bool.and_eq_true, beq_iff_eq] at hpref₁ hpref₂
+          obtain ⟨heq₁, hpref₁'⟩ := hpref₁
+          obtain ⟨heq₂, hpref₂'⟩ := hpref₂
+          rw [heq₁, heq₂]
+          simp only [cons.injEq, true_and]
+          exact ih as₁ as₂ bs hlength₁ hlength₂ hpref₁' hpref₂'
+
 /-
 * Lemma - Two lists of equal length and prefix of the same list are equal.
 Simplified version of the above lemma.
 -/
 lemma List.prefix_eqlen_eq (l₁ l₂ bl : BoolList) :
   l₁.length = l₂.length → l₁.isPrefixOf bl → l₂.isPrefixOf bl → l₁ = l₂ := by
-  have h := prefix_eqlen_eq_n l₁.length l₁ l₂ bl
-  grind
-
-
+    have h := prefix_eqlen_eq_n l₁.length l₁ l₂ bl
+    simp only [forall_const] at h
+    rw [Eq.comm]
+    exact h
+ 
 /-
 * Theorem: The Huffman tree is prefix-free.
 -/
@@ -85,7 +99,7 @@ theorem HfmnTree.hfmntree_is_prefix_free (t : HfmnTree α) (c : BoolList) :
 
     let pl := HfmnTree.hfmntree_is_prefix_free l cL
     let pr := HfmnTree.hfmntree_is_prefix_free r cR
-
+     
     apply List.pairwise_append.2
     constructor
     case left =>
@@ -94,13 +108,14 @@ theorem HfmnTree.hfmntree_is_prefix_free (t : HfmnTree α) (c : BoolList) :
       constructor
       · exact pr
       · intro v₁ hv₁ v₂ hv₂ vl₁ vl₂
-        unfold checkPrefixfree
-        simp only [List.isPrefixOf_iff_prefix, Bool.decide_and, decide_not, Bool.and_eq_true, Bool.not_eq_eq_eq_not, Bool.not_true, decide_eq_false_iff_not]
-
+        unfold checkPrefixfree 
+        simp only [List.isPrefixOf_iff_prefix, Bool.decide_and, decide_not, Bool.and_eq_true,
+          Bool.not_eq_eq_eq_not, Bool.not_true, decide_eq_false_iff_not]
+        
         have pr₁: (c++ [false]).isPrefixOf v₁.code := by
           exact initialCodeIsPrefix l cL v₁ hv₁
         have pr₂: (c++ [true]).isPrefixOf v₂.code := by
-          exact initialCodeIsPrefix r cR v₂ hv₂
+          exact initialCodeIsPrefix r cR v₂ hv₂ 
         have cleq : cL.length = cR.length := by
           exact Eq.symm (List.eq_suff_eq_len c)
         have cneq : ¬ cL = cR := by
@@ -116,7 +131,7 @@ theorem HfmnTree.hfmntree_is_prefix_free (t : HfmnTree α) (c : BoolList) :
           have ceq : cL = cR := by
             exact List.prefix_eqlen_eq cL cR v₂.code cleq h' pr₂
           contradiction
-
+            
         · intro h₂
           have h' : (c ++ [true]).isPrefixOf v₁.code := by
             simp_all
