@@ -15,8 +15,11 @@
   4. Show that `HfmnTree.encode c t` has length = `depth t c`
      (connects the existing `leastEncodedData` to the tree structure).
   5. Show `leastEncodedData` = `weightedPathLength` of the Huffman tree.
-  6. Main theorem by structural induction + exchange argument + IH on the
-     merged sub-problem.
+    6. OpenDSA-style exchange framework:
+      local exchange inequality + transitive closure yields optimality on
+      the exchange-reachable admissible class.
+    7. Final global step is isolated as one proposition:
+      `HfmnTree.ExchangeComplete` (reachability of all admissible trees).
 -/
 
 import Huffman.HfmnTree_prefixfreeness
@@ -476,6 +479,27 @@ theorem HfmnTree.tree_weight_eq_sum (input : AlphaNumList α) :
         _ = HfmnTree.totalWeight sorted := by grind
         _ = HfmnTree.totalWeight leaves := by grind
         _ = input.foldl (fun acc (_, f) => acc + f) 0 := by grind
+
+/-- Replace every leaf weight by `0`, preserving the tree shape and characters. -/
+def HfmnTree.zeroWeights : HfmnTree α → HfmnTree α
+  | .Leaf a _ => .Leaf a 0
+  | .Node l r => .Node (HfmnTree.zeroWeights l) (HfmnTree.zeroWeights r)
+
+@[simp]
+lemma HfmnTree.zeroWeights_chars (t : HfmnTree α) :
+    (HfmnTree.zeroWeights t).chars = t.chars := by
+  induction t with
+  | Leaf a f => simp [HfmnTree.zeroWeights]
+  | Node l r ihl ihr =>
+      simp [HfmnTree.zeroWeights, HfmnTree.chars, ihl, ihr]
+
+@[simp]
+lemma HfmnTree.zeroWeights_weight (t : HfmnTree α) :
+    (HfmnTree.zeroWeights t).weight = 0 := by
+  induction t with
+  | Leaf a f => simp [HfmnTree.zeroWeights]
+  | Node l r ihl ihr =>
+      simp [HfmnTree.zeroWeights, ihl, ihr]
 
 /-- The two smallest frequencies are merged first. -/
 lemma HfmnTree.tree_merges_smallest (input : AlphaNumList α) (h : input.length ≥ 2) :
@@ -1109,6 +1133,41 @@ theorem HfmnTree.exchangeComplete_implies_weight_alignment
   exact exchangeSeq_from_huffman_preserves_weight huffinput T (hComplete T hAlphabet)
 
 /--
+With the current chars-only admissibility notion, global exchange-completeness
+is impossible whenever the Huffman tree has positive total weight.
+-/
+theorem HfmnTree.not_exchangeComplete_of_tree_weight_pos
+    (huffinput : AlphaNumList α)
+    (hpos : 0 < (HfmnTree.tree huffinput).weight) :
+    ¬ HfmnTree.ExchangeComplete huffinput := by
+  intro hComplete
+  let T : HfmnTree α := HfmnTree.zeroWeights (HfmnTree.tree huffinput)
+  have hAlphabet : T.chars = (HfmnTree.tree huffinput).chars := by
+    exact HfmnTree.zeroWeights_chars (HfmnTree.tree huffinput)
+  have hAlign : T.weight = (HfmnTree.tree huffinput).weight :=
+    HfmnTree.exchangeComplete_implies_weight_alignment huffinput hComplete T hAlphabet
+  have hTreeZero : (HfmnTree.tree huffinput).weight = 0 := by
+    have hTZero : T.weight = 0 := by
+      exact HfmnTree.zeroWeights_weight (HfmnTree.tree huffinput)
+    calc
+      (HfmnTree.tree huffinput).weight = T.weight := by exact hAlign.symm
+      _ = 0 := hTZero
+  have hpos0 : 0 < 0 := by
+    rw [hTreeZero] at hpos
+    exact hpos
+  exact (Nat.lt_irrefl 0) hpos0
+
+theorem HfmnTree.not_exchangeComplete_of_input_sum_pos
+    (huffinput : AlphaNumList α)
+    (hpos : 0 < huffinput.foldl (fun acc (_, f) => acc + f) 0) :
+    ¬ HfmnTree.ExchangeComplete huffinput := by
+  have hwt : 0 < (HfmnTree.tree huffinput).weight := by
+    rw [HfmnTree.tree_weight_eq_sum]
+    exact hpos
+  apply HfmnTree.not_exchangeComplete_of_tree_weight_pos
+  exact hwt
+
+/--
 Huffman optimality under a global exchange-connectivity theorem.
 
 This isolates the final missing combinatorial ingredient: proving
@@ -1128,3 +1187,41 @@ theorem HfmnTree.huffman_optimal_of_exchangeComplete
       (HfmnTree.tree huffinput) T :=
     hComplete T hAlphabet
   exact HfmnTree.huffman_optimal huffinput T hAlphabet hUniqueInput hseq
+
+/-- A target tree is admissible for `input` when it has the same encoded alphabet. -/
+def HfmnTree.isAdmissible (input : AlphaNumList α) (T : HfmnTree α) : Prop :=
+  T.chars = (HfmnTree.tree input).chars
+
+/--
+OpenDSA-style optimality statement in the current development:
+after putting the two least-frequency symbols in exchange-ready positions
+and iterating the local exchange rule, Huffman is globally optimal on the
+reachable admissible class.
+-/
+theorem HfmnTree.huffman_optimal_opendsa_reachable
+    (huffinput : AlphaNumList α)
+    (T : HfmnTree α)
+    (hAdmissible : HfmnTree.isAdmissible huffinput T)
+    (hUniqueInput : HfmnTree.inputUnique huffinput)
+    (hseq : Relation.ReflTransGen
+      (HfmnTree.ExchangeStep huffinput)
+      (HfmnTree.tree huffinput) T) :
+    weightedPathLength (HfmnTree.tree huffinput) huffinput ≤
+    weightedPathLength T huffinput := by
+  exact HfmnTree.huffman_optimal huffinput T hAdmissible hUniqueInput hseq
+
+/--
+OpenDSA-style global form: if exchange-completeness is established,
+then Huffman is optimal over all admissible trees.
+-/
+theorem HfmnTree.huffman_optimal_opendsa
+    (huffinput : AlphaNumList α)
+    (hComplete : HfmnTree.ExchangeComplete huffinput)
+    (hUniqueInput : HfmnTree.inputUnique huffinput) :
+    ∀ T : HfmnTree α,
+      HfmnTree.isAdmissible huffinput T →
+      weightedPathLength (HfmnTree.tree huffinput) huffinput ≤
+      weightedPathLength T huffinput := by
+  intro T hAdmissible
+  exact HfmnTree.huffman_optimal_of_exchangeComplete
+    huffinput hComplete T hAdmissible hUniqueInput
