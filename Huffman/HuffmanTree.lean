@@ -132,6 +132,46 @@ theorem insertionSort_preserves_length {α : Type} [Ord α] :
     have h := orderedInsert_inc_length b (insertionSort l)
     grind
 
+@[grind .]
+lemma orderedInsert_sorted_weight (a : HfmnTree α) (l : List (HfmnTree α))
+    (h : l.Pairwise (fun t₁ t₂ => t₁.weight ≤ t₂.weight)) :
+    (orderedInsert a l).Pairwise (fun t₁ t₂ => t₁.weight ≤ t₂.weight) := by
+  induction l with
+  | nil =>
+    simp [orderedInsert]
+  | cons b t ih =>
+    rcases List.pairwise_cons.1 h with ⟨hb, ht⟩
+    by_cases hlt : compare a b = .lt
+    · have hab : a.weight ≤ b.weight := by
+        have hcmpw : compare a.weight b.weight = Ordering.lt := by
+          simpa [HfmnTree.compare] using hlt
+        grind
+      rw [orderedInsert, hlt]
+      exact List.pairwise_cons.2 ⟨by grind, List.pairwise_cons.2 ⟨hb, ht⟩⟩
+    · have hba : b.weight ≤ a.weight := by
+        have hnotlt : ¬ a.weight < b.weight := by
+          intro hltw
+          apply hlt
+          have hcmpw : compare a.weight b.weight = Ordering.lt :=
+            Nat.compare_eq_lt.mpr hltw
+          simpa [HfmnTree.compare] using hcmpw
+        exact Nat.le_of_not_gt hnotlt
+      have hbins : ∀ x ∈ orderedInsert a t, b.weight ≤ x.weight := by
+        intro x hx
+        rcases (mem_orderedInsert x a t).1 hx with rfl | hxin
+        · exact hba
+        · exact hb x hxin
+      have hrec : (orderedInsert a t).Pairwise (fun t₁ t₂ => t₁.weight ≤ t₂.weight) := ih ht
+      simpa [orderedInsert, hlt] using (List.pairwise_cons.2 ⟨hbins, hrec⟩)
+
+lemma insertionSort_sorted (trees : List (HfmnTree α)) :
+    (insertionSort trees).Pairwise (fun t₁ t₂ => t₁.weight ≤ t₂.weight) := by
+  induction trees with
+  | nil =>
+    simp [insertionSort]
+  | cons t ts ih =>
+    simpa [insertionSort] using orderedInsert_sorted_weight t (insertionSort ts) ih
+
 /- * Lemma: The insertionSorted non-empty list is non-empty -/
 @[simp, grind .]
 lemma sorted_nonempty_is_nonempty (trees : List (HfmnTree α)) (h : trees ≠ []) :

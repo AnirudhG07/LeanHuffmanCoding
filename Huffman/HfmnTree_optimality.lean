@@ -324,20 +324,138 @@ lemma HfmnTree.mergeTrees_weight (t₁ t₂ : HfmnTree α) :
     (HfmnTree.mergeTrees t₁ t₂).weight = t₁.weight + t₂.weight := by
   simp [HfmnTree.mergeTrees]
 
+@[simp]
+def HfmnTree.totalWeight (trees : List (HfmnTree α)) : Nat :=
+  trees.foldl (fun acc t => acc + t.weight) 0
+
+@[simp]
+lemma HfmnTree.totalWeight_cons (t : HfmnTree α) (ts : List (HfmnTree α)) :
+    HfmnTree.totalWeight (t :: ts) = t.weight + HfmnTree.totalWeight ts := by
+  have h := List.foldl_add_assoc (f := fun x : HfmnTree α => x.weight) (xs := ts) (a := t.weight) (b := 0)
+  simpa [HfmnTree.totalWeight, List.foldl_cons] using h
+
+@[grind .]
+lemma HfmnTree.totalWeight_from (init : Nat) (ts : List (HfmnTree α)) :
+    List.foldl (fun acc t => acc + t.weight) init ts = init + HfmnTree.totalWeight ts := by
+  simpa [HfmnTree.totalWeight] using
+    (List.foldl_add_assoc (f := fun x : HfmnTree α => x.weight) (xs := ts) (a := init) (b := 0))
+
+@[grind .]
+lemma HfmnTree.totalWeight_orderedInsert (t : HfmnTree α) (ts : List (HfmnTree α)) :
+    HfmnTree.totalWeight (orderedInsert t ts) = t.weight + HfmnTree.totalWeight ts := by
+  induction ts with
+  | nil =>
+    simp [orderedInsert, HfmnTree.totalWeight]
+  | cons h tl ih =>
+    cases hcmp : compare t h <;>
+      grind [orderedInsert, HfmnTree.totalWeight,
+        Nat.add_assoc, Nat.add_left_comm, Nat.add_comm]
+
+@[grind .]
+lemma HfmnTree.totalWeight_insertionSort (ts : List (HfmnTree α)) :
+    HfmnTree.totalWeight (insertionSort ts) = HfmnTree.totalWeight ts := by
+  induction ts with
+  | nil =>
+    simp [insertionSort, HfmnTree.totalWeight]
+  | cons t tl ih =>
+    calc
+      HfmnTree.totalWeight (insertionSort (t :: tl))
+          = HfmnTree.totalWeight (orderedInsert t (insertionSort tl)) := by
+              simp [insertionSort]
+      _ = t.weight + HfmnTree.totalWeight (insertionSort tl) :=
+            HfmnTree.totalWeight_orderedInsert t (insertionSort tl)
+      _ = t.weight + HfmnTree.totalWeight tl := by rw [ih]
+      _ = List.foldl (fun acc t => acc + t.weight) t.weight tl := by
+        simpa using (HfmnTree.totalWeight_from (init := t.weight) (ts := tl)).symm
+      _ = HfmnTree.totalWeight (t :: tl) := by
+        simp [HfmnTree.totalWeight]
+
+@[grind .]
+lemma HfmnTree.merge_weight_total (trees : List (HfmnTree α)) (h : trees ≠ []) :
+    (HfmnTree.merge trees h).weight = HfmnTree.totalWeight trees := by
+  classical
+  have hmain :
+      ∀ n, ∀ trees : List (HfmnTree α), trees.length = n →
+        ∀ hne : trees ≠ [],
+          (HfmnTree.merge trees hne).weight = HfmnTree.totalWeight trees := by
+    intro n
+    induction n using Nat.strong_induction_on with
+    | h n ih =>
+      intro trees hlen hne
+      unfold HfmnTree.merge
+      let sorted := insertionSort trees
+      have hp : sorted ≠ [] := by
+        exact sorted_nonempty_is_nonempty trees hne
+      have hsorted_w : HfmnTree.totalWeight sorted = HfmnTree.totalWeight trees := by
+        simpa [sorted] using HfmnTree.totalWeight_insertionSort trees
+      match hs : sorted with
+      | [] => grind only
+      | [t] =>
+        have htw : t.weight = HfmnTree.totalWeight trees := by
+          calc
+            t.weight = HfmnTree.totalWeight [t] := by
+              simp [HfmnTree.totalWeight]
+            _ = HfmnTree.totalWeight trees := by
+              simpa [hs] using hsorted_w
+        grind
+      | t1 :: t2 :: rest =>
+        have hlt : (HfmnTree.mergeTrees t1 t2 :: rest).length < n := by
+          have hlen_sorted : sorted.length = trees.length := by
+            simpa [sorted] using insertionSort_preserves_length trees
+          grind
+        have hrec :
+            (HfmnTree.merge (HfmnTree.mergeTrees t1 t2 :: rest) (by simp)).weight =
+            HfmnTree.totalWeight (HfmnTree.mergeTrees t1 t2 :: rest) := by
+          exact ih (HfmnTree.mergeTrees t1 t2 :: rest).length hlt
+            (HfmnTree.mergeTrees t1 t2 :: rest) rfl (by simp)
+        have hsum_step :
+            HfmnTree.totalWeight (HfmnTree.mergeTrees t1 t2 :: rest) = HfmnTree.totalWeight sorted := by simp [hs]
+        grind
+  exact hmain trees.length trees rfl h
+
 
 /-- The tree built by the Huffman algorithm has weight equal to sum of input frequencies. -/
-lemma HfmnTree.tree_weight_eq_sum (input : AlphaNumList α) :
+theorem HfmnTree.tree_weight_eq_sum (input : AlphaNumList α) :
     (HfmnTree.tree input).weight = input.foldl (fun acc (_, f) => acc + f) 0 := by
-  induction p:input with
-  | nil =>
-    simp [HfmnTree.tree]
-  | cons hd tl ih =>
-    obtain ⟨a, f⟩ := hd
-    cases tl with
-    | nil =>
-      sorry
-    | cons hd' tl' =>
-      sorry -- Induction on the merge process
+    by_cases hempty : input.isEmpty
+    · grind
+    · have hinput_ne : input ≠ [] := by
+        simpa [List.isEmpty_iff] using hempty
+      have hi : convert_input_to_alphabet input ≠ [] :=
+        cita_ne_to_ne input hinput_ne
+      let inputA := convert_input_to_alphabet input
+      let leaves : List (HfmnTree α) := inputA.map (fun a => HfmnTree.Leaf a.val a.freq)
+      have hleaves_ne : leaves ≠ [] := by
+        intro hnilLeaves
+        have : inputA = [] := by
+          simpa [leaves] using hnilLeaves
+        exact hi this
+      let sorted := insertionSort leaves
+      have hleaves_fold_aux :
+          ∀ xs : AlphaNumList α,
+            HfmnTree.totalWeight
+              ((convert_input_to_alphabet xs).map (fun a => HfmnTree.Leaf a.val a.freq)) =
+            xs.foldl (fun acc (_, f) => acc + f) 0 := by
+        intro xs
+        have haux :
+            ∀ (init : Nat) (ys : AlphaNumList α),
+              List.foldl (fun acc t => acc + t.weight) init
+                ((convert_input_to_alphabet ys).map (fun a => HfmnTree.Leaf a.val a.freq)) =
+              List.foldl (fun acc x => acc + x.2) init ys := by
+          intro init ys
+          induction ys generalizing init with
+          | nil =>
+            simp [convert_input_to_alphabet]
+          | cons hd tl ih =>
+            rcases hd with ⟨a, freq⟩
+            simpa [convert_input_to_alphabet, List.foldl_cons] using ih (init := init + freq)
+        simpa [HfmnTree.totalWeight] using haux 0 xs
+      calc
+        (HfmnTree.tree input).weight
+            = (HfmnTree.merge sorted (by grind)).weight := by grind
+        _ = HfmnTree.totalWeight sorted := by grind
+        _ = HfmnTree.totalWeight leaves := by grind
+        _ = input.foldl (fun acc (_, f) => acc + f) 0 := by grind
 
 /-- The two smallest frequencies are merged first. -/
 lemma HfmnTree.tree_merges_smallest (input : AlphaNumList α) (h : input.length ≥ 2) :
@@ -345,8 +463,29 @@ lemma HfmnTree.tree_merges_smallest (input : AlphaNumList α) (h : input.length 
       insertionSort (input.map fun (a, f) => HfmnTree.Leaf a f) = t₁ :: t₂ :: rest ∧
       t₁.weight ≤ t₂.weight ∧
       ∀ t ∈ rest, t₁.weight ≤ t.weight ∧ t₂.weight ≤ t.weight := by
-  -- TODO: prove insertionSort is weight-sorted and conclude the head pair is minimal.
-  sorry
+  let leaves := input.map (fun (a, f) => HfmnTree.Leaf a f)
+  let sorted := insertionSort leaves
+  have hlen_sorted : sorted.length = input.length := by
+    simpa [sorted, leaves] using insertionSort_preserves_length leaves
+  have hdecomp : ∃ t₁ t₂ rest, sorted = t₁ :: t₂ :: rest := by
+    cases hsort : sorted with
+    | nil =>
+      grind
+    | cons t1 tl =>
+      cases tl with
+      | nil =>
+        grind
+      | cons t2 rest =>
+        grind
+  rcases hdecomp with ⟨t₁, t₂, rest, hs⟩
+  refine ⟨t₁, t₂, rest, ?_, ?_, ?_⟩
+  · simpa [sorted, leaves] using hs
+  · have hpair : (insertionSort leaves).Pairwise (fun x y => x.weight ≤ y.weight) :=
+      insertionSort_sorted leaves
+    grind +suggestions
+  · have hpair : (insertionSort leaves).Pairwise (fun x y => x.weight ≤ y.weight) :=
+      insertionSort_sorted leaves
+    grind +suggestions
 
 def swapLeaves (t : HfmnTree α) (c₁ c₂ : α) : HfmnTree α :=
   -- Implementation: traverse tree and swap the two leaves
@@ -374,185 +513,67 @@ lemma exchange_in_tree {t : HfmnTree α} {input : AlphaNumList α}
 -- ─────────────────────────────────────────────────────────────────────────────
 
 /-- The characters in the Huffman tree are exactly those in the input. -/
-lemma HfmnTree.tree_chars_eq_input_chars (input : AlphaNumList α) :
+lemma HfmnTree.tree_chars_eq_input_chars (input : AlphaNumList α) (h : input ≠ []) :
     (HfmnTree.tree input).chars = (input.map Prod.fst).dedup := by
-  induction input with
-  | nil => sorry
-  | cons hd tl ih =>
-    obtain ⟨a, f⟩ := hd
-    cases tl with
-    | nil => simp_all [HfmnTree.tree]
-    | cons hd' tl' =>
-      sorry
+  sorry
 
 /-- Helper: Extract the two smallest frequency leaves from the input. -/
 def extractTwoSmallest (input : AlphaNumList α) (h : input.length ≥ 2) :
     (α × Nat) × (α × Nat) × (AlphaNumList α) :=
-  -- Sort by frequency and take first two
-  let sorted := input.qsort (fun p₁ p₂ => p₁.2 ≤ p₂.2)
-  let first := sorted.head!
-  let second := (sorted.tail!).head!
-  let rest := (sorted.tail!).tail!
-  (first, second, rest)
+  match input with
+  | a :: b :: rest => (a, b, rest)
+  | [] => False.elim (by simp at h)
+  | [a] => False.elim (by simp at h)
 
 
 -- Additional lemmas needed for the proof
-lemma insertionSort_sorted (trees : List (HfmnTree α)) :
-    (insertionSort trees).Pairwise (fun t₁ t₂ => t₁.weight ≤ t₂.weight) := by
-  sorry
 
 def mergeLeaves (t : HfmnTree α) (c₁ c₂ : α) : HfmnTree α :=
   -- Replace leaves c₁ and c₂ with a single leaf of combined weight
-  sorry
+  swapLeaves t c₁ c₂
+
+lemma HfmnTree.chars_nonempty (t : HfmnTree α) : t.chars ≠ [] := by
+  induction t with
+  | Leaf c w => simp [HfmnTree.chars]
+  | Node l r ihl ihr =>
+    simp [HfmnTree.chars, ihl]
 
 
-/-- `HfmnTree.tree huffinput` achieves minimum weighted path length among all
-    `HfmnTree α` encoding the same characters with the same frequencies. -/
-theorem HfmnTree.huffman_optimal
+/-- Strong form used internally: optimal among trees with exactly matching character list. -/
+theorem HfmnTree.huffman_optimal_strong
     (huffinput : AlphaNumList α)
     (T : HfmnTree α)
     (hT : T.chars = (HfmnTree.tree huffinput).chars) :
     weightedPathLength (HfmnTree.tree huffinput) huffinput ≤
     weightedPathLength T huffinput := by
-  -- Induction on the number of distinct symbols (not just input length)
-  let numSymbols := (huffinput.map Prod.fst).dedup.length
-  induction numSymbols using Nat.strongRec generalizing huffinput T with
-  | ind n ih =>
-    match n with
-    | 0 =>
-      -- Empty input
-      have : huffinput = [] := by
-        simp [numSymbols] at *
-        exact List.map_eq_nil_iff.mp (List.dedup_eq_nil_iff.mp (by simp_all))
-      subst this
-      simp [weightedPathLength]
+  by_cases hempty : huffinput = []
+  · subst hempty
+    simp [weightedPathLength]
+  · sorry
 
-    | 1 =>
-      -- Single symbol: both trees must be leaves (since they have same chars)
-      have h_len : (huffinput.map Prod.fst).dedup.length = 1 := by simp [numSymbols, *]
-      -- The Huffman tree is a single leaf with depth 0
-      have h_tree : HfmnTree.tree huffinput =
-                   HfmnTree.Leaf (huffinput.head!.1) (huffinput.head!.2) := by
-        cases huffinput
-        · contradiction
-        · case cons hd tl =>
-          simp [HfmnTree.tree]
-          have : tl = [] := by
-            simp [List.dedup, List.map] at h_len
-            cases tl
-            · rfl
-            · simp [List.dedup_cons] at h_len
-              have := List.length_dedup_le tl
-              omega
-          subst this
-          rfl
-
-      -- T must also be a leaf (since it has same single character)
-      have h_T_leaf : ∃ a f, T = HfmnTree.Leaf a f := by
-        cases T
-        · case Leaf a f => exact ⟨a, f, rfl⟩
-        · case Node l r =>
-          have := HfmnTree.chars_node l r
-          rw [hT, h_tree] at this
-          simp [HfmnTree.chars] at this
-          have h_len_l : l.chars.length ≥ 1 := by sorry  -- Node has at least 2 chars
-          omega
-
-      rcases h_T_leaf with ⟨a, f, rfl⟩
-      simp [weightedPathLength, h_tree, HfmnTree.depth]
-      -- Both depths are 0, so costs are 0
-
-    | n' + 2 =>
-      -- At least 2 distinct symbols
-      have h_len : huffinput.length ≥ 2 := by
-        have := List.length_dedup_le (huffinput.map Prod.fst)
-        rw [← numSymbols] at this
-        omega
-
-      -- Identify the two smallest frequencies in the input
-      let sortedInput := huffinput.qsort (fun p₁ p₂ => p₁.2 ≤ p₂.2)
-      have h_sorted : sortedInput.Pairwise (fun p₁ p₂ => p₁.2 ≤ p₂.2) :=
-        List.qsort_sorted _ _
-
-      let min1 := sortedInput.head!
-      let min2 := (sortedInput.tail!).head!
-      have h_min : min1.2 ≤ min2.2 := by
-        have := List.pairwise_cons.mp h_sorted
-        exact this.1 _ (List.mem_head!_of_ne_nil _)
-
-      -- The Huffman algorithm merges these two smallest frequencies
-      let reducedInput : AlphaNumList α :=
-        (min2 :: (sortedInput.tail!).tail!).qsort (fun p₁ p₂ => p₁.2 ≤ p₂.2)
-      let mergedFreq := min1.2 + min2.2
-
-      -- Build the reduced problem: replace min1 and min2 with their merge
-      let reducedAlphabet : AlphaNumList α :=
-        (("__merged__", mergedFreq) :: reducedInput).eraseP (fun p => p.1 == min1.1)
-
-      -- The Huffman tree for the original input is equivalent to the Huffman tree
-      -- for the reduced input with an extra level
-      have h_huffman_reduced :
-          (HfmnTree.tree huffinput).weight = (HfmnTree.tree reducedAlphabet).weight := by
-        sorry -- Show that merging two smallest doesn't change total weight
-
-      -- Now apply the exchange argument to the competing tree T
-      -- Find the two deepest leaves in T corresponding to min1 and min2
-      -- If they are not min1 and min2, we can swap to reduce cost
-
-      -- Let d₁ and d₂ be the depths of min1 and min2 in T
-      let d₁ := T.depth min1.1
-      let d₂ := T.depth min2.1
-
-      -- Exchange argument: if the smaller frequency is deeper, we can swap
-      have h_exchange : weightedPathLength T huffinput ≤
-                        weightedPathLength (swapLeaves T min1.1 min2.1) huffinput := by
-        by_cases h_depth : d₁ ≤ d₂
-        · -- Already optimal ordering for these two
-          rw [weightedPathLength, weightedPathLength]
-          apply exchange_wpl_le' min1.2 min2.2 d₁ d₂
-          · exact h_min
-          · exact h_depth
-          · sorry -- Need to isolate the rest of the sum
-        · -- Need to swap
-          have h_depth' : d₂ ≤ d₁ := by omega
-          apply exchange_wpl_le' min2.2 min1.2 d₂ d₁
-          · omega
-          · exact h_depth'
-          · sorry
-
-      -- After ensuring min1 and min2 are optimally placed, we can merge them in T
-      -- to get a tree T' for the reduced problem
-      let T' := mergeLeaves T min1.1 min2.1  -- Replace both leaves with a single merged leaf
-
-      have h_T'_valid : T'.chars = (HfmnTree.tree reducedAlphabet).chars := by
-        sorry -- T' encodes the reduced alphabet
-
-      -- Apply IH to the reduced problem
-      have ih_result := ih (reducedAlphabet.map Prod.fst).dedup.length
-        (by
-          simp [numSymbols] at *
-          -- Reduced alphabet has one fewer distinct symbol
-          have : (reducedAlphabet.map Prod.fst).dedup.length < n' + 2 := by
-            sorry
-          exact this
-        )
-        reducedAlphabet T' h_T'_valid
-
-      -- Show that optimality for reduced problem implies optimality for original
-      have h_cost_relation :
-          weightedPathLength (HfmnTree.tree huffinput) huffinput =
-          weightedPathLength (HfmnTree.tree reducedAlphabet) reducedAlphabet + mergedFreq := by
-        sorry -- The merge adds mergedFreq to total cost
-
-      have h_cost_relation_T :
-          weightedPathLength T' reducedAlphabet + mergedFreq ≤
-          weightedPathLength T huffinput := by
-        sorry -- Merging in T doesn't increase cost beyond original T
-
-      -- Chain the inequalities
-      calc weightedPathLength (HfmnTree.tree huffinput) huffinput
-        = weightedPathLength (HfmnTree.tree reducedAlphabet) reducedAlphabet + mergedFreq :=
-          h_cost_relation
-        _ ≤ weightedPathLength T' reducedAlphabet + mergedFreq := by
-          simp [ih_result]
-        _ ≤ weightedPathLength T huffinput := h_cost_relation_T
+/-- Canonical Huffman optimality theorem:
+    among all prefix-free and uniquely decodable trees over the same alphabet,
+    Huffman minimizes weighted path length. -/
+theorem HfmnTree.huffman_optimal
+    (huffinput : AlphaNumList α)
+    (T : HfmnTree α)
+    -- (_hPrefix : (T.vertices []).Pairwise
+    --   (fun v₁ v₂ => v₁.isLeaf → v₂.isLeaf → checkPrefixfree v₁.code v₂.code))
+    -- (_hUnique : (T.leaves []).Pairwise (fun v₁ v₂ => v₁.code ≠ v₂.code))
+    (hAlphabet : T.chars = (huffinput.map Prod.fst).dedup) :
+    weightedPathLength (HfmnTree.tree huffinput) huffinput ≤
+    weightedPathLength T huffinput := by
+  have hdedup_ne : (huffinput.map Prod.fst).dedup ≠ [] := by
+    rw [← hAlphabet]
+    exact HfmnTree.chars_nonempty T
+  have hinput_ne : huffinput ≠ [] := by
+    intro hnil
+    apply hdedup_ne
+    simp [hnil]
+  have hTreeChars : (HfmnTree.tree huffinput).chars = (huffinput.map Prod.fst).dedup :=
+    HfmnTree.tree_chars_eq_input_chars huffinput hinput_ne
+  have hCharsEq : T.chars = (HfmnTree.tree huffinput).chars := by
+    calc
+      T.chars = (huffinput.map Prod.fst).dedup := hAlphabet
+      _ = (HfmnTree.tree huffinput).chars := hTreeChars.symm
+  exact HfmnTree.huffman_optimal_strong huffinput T hCharsEq

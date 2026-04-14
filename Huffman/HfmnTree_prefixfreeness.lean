@@ -68,7 +68,6 @@ lemma List.prefix_eqlen_eq (l₁ l₂ bl : BoolList) :
   have h := prefix_eqlen_eq_n l₁.length l₁ l₂ bl
   grind
 
-
 /-
 * Theorem: The Huffman tree is prefix-free.
 -/

@@ -198,7 +198,6 @@ theorem HfmnTree.codes_disjoint_of_nonprefix
     have h': c₂ <+: c₁ := by
       simp at p₁ p₂ hne₁
       exact lenpref_of_pref_isprefix c₂ c₁ v₂.code p₂ hne₁ hl'
-
     contradiction
 
 /-
