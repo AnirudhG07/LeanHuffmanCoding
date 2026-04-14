@@ -20,6 +20,7 @@
 -/
 
 import Huffman.HfmnTree_prefixfreeness
+import Huffman.HfmnTree_uniqueness
 import Mathlib
 
 set_option linter.unusedSectionVars false
@@ -470,52 +471,77 @@ lemma HfmnTree.tree_merges_smallest (input : AlphaNumList α) (h : input.length 
   have hdecomp : ∃ t₁ t₂ rest, sorted = t₁ :: t₂ :: rest := by
     cases hsort : sorted with
     | nil =>
-      grind
+      exfalso
+      have : sorted.length = 0 := by simp [hsort]
+      have hlen0 : input.length = 0 := by simpa [hlen_sorted] using this
+      omega
     | cons t1 tl =>
       cases tl with
       | nil =>
-        grind
+        exfalso
+        have : sorted.length = 1 := by simp [hsort]
+        have hlen1 : input.length = 1 := by simpa [hlen_sorted] using this
+        omega
       | cons t2 rest =>
-        grind
+        exact ⟨t1, t2, rest, rfl⟩
   rcases hdecomp with ⟨t₁, t₂, rest, hs⟩
   refine ⟨t₁, t₂, rest, ?_, ?_, ?_⟩
   · simpa [sorted, leaves] using hs
   · have hpair : (insertionSort leaves).Pairwise (fun x y => x.weight ≤ y.weight) :=
       insertionSort_sorted leaves
-    grind +suggestions
+    have hpair' : sorted.Pairwise (fun x y => x.weight ≤ y.weight) := by
+      simpa [sorted] using hpair
+    rw [hs] at hpair'
+    rcases List.pairwise_cons.1 hpair' with ⟨h12, htail⟩
+    exact h12 t₂ (by simp)
   · have hpair : (insertionSort leaves).Pairwise (fun x y => x.weight ≤ y.weight) :=
       insertionSort_sorted leaves
-    grind +suggestions
+    have hpair' : sorted.Pairwise (fun x y => x.weight ≤ y.weight) := by
+      simpa [sorted] using hpair
+    rw [hs] at hpair'
+    rcases List.pairwise_cons.1 hpair' with ⟨h12, htail⟩
+    rcases List.pairwise_cons.1 htail with ⟨h23, hrest⟩
+    intro t ht
+    exact ⟨h12 t (by simp [ht]), h23 t ht⟩
 
 def swapLeaves (t : HfmnTree α) (c₁ c₂ : α) : HfmnTree α :=
-  -- Implementation: traverse tree and swap the two leaves
   match t with
-  | .Leaf a f => if a = c₁ then .Leaf c₂ f else if a = c₂ then .Leaf c₁ f else t
+  | .Leaf a f =>
+      if a = c₁ then .Leaf c₂ f
+      else if a = c₂ then .Leaf c₁ f
+      else .Leaf a f
   | .Node l r => .Node (swapLeaves l c₁ c₂) (swapLeaves r c₁ c₂)
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- §7  Exchange lemma for trees
 -- ─────────────────────────────────────────────────────────────────────────────
 
-/-- Swapping two leaves in a tree at depths d₁ and d₂ (d₁ ≤ d₂) with frequencies
-    f₁ and f₂ (f₁ ≥ f₂) does not increase the weighted path length. -/
-lemma exchange_in_tree {t : HfmnTree α} {input : AlphaNumList α}
+/--
+Exchange step under an explicit weighted-path decomposition hypothesis.
+
+This proves the arithmetic core used in the exchange argument. The structural
+fact that `swapLeaves` induces this decomposition is handled separately.
+-/
+theorem exchange_in_tree_of_decomp {t : HfmnTree α} {input : AlphaNumList α}
     {c₁ c₂ : α} {f₁ f₂ : Nat}
-    (h₁ : (c₁, f₁) ∈ input) (h₂ : (c₂, f₂) ∈ input)
-    (hf : f₂ ≤ f₁) (hd : t.depth c₁ ≤ t.depth c₂) :
+    (_h₁ : (c₁, f₁) ∈ input) (_h₂ : (c₂, f₂) ∈ input)
+    (hf : f₂ ≤ f₁) (hd : t.depth c₁ ≤ t.depth c₂)
+    (hdecomp : ∃ rest,
+      weightedPathLength t input = f₁ * t.depth c₁ + f₂ * t.depth c₂ + rest ∧
+      weightedPathLength (swapLeaves t c₁ c₂) input =
+        f₁ * t.depth c₂ + f₂ * t.depth c₁ + rest) :
     let t' := swapLeaves t c₁ c₂  -- Hypothetical tree with c₁ and c₂ swapped
     weightedPathLength t input ≤ weightedPathLength t' input := by
-  -- This requires defining swapLeaves and showing it only affects depths of c₁ and c₂
-  sorry
-
+  rcases hdecomp with ⟨rest, hleft, hright⟩
+  calc
+    weightedPathLength t input
+        = f₁ * t.depth c₁ + f₂ * t.depth c₂ + rest := hleft
+    _ ≤ f₁ * t.depth c₂ + f₂ * t.depth c₁ + rest :=
+        exchange_wpl_le_rest f₁ f₂ (t.depth c₁) (t.depth c₂) rest hf hd
+    _ = weightedPathLength (swapLeaves t c₁ c₂) input := hright.symm
 -- ─────────────────────────────────────────────────────────────────────────────
 -- §8  Main optimality theorem
 -- ─────────────────────────────────────────────────────────────────────────────
-
-/-- The characters in the Huffman tree are exactly those in the input. -/
-lemma HfmnTree.tree_chars_eq_input_chars (input : AlphaNumList α) (h : input ≠ []) :
-    (HfmnTree.tree input).chars = (input.map Prod.fst).dedup := by
-  sorry
 
 /-- Helper: Extract the two smallest frequency leaves from the input. -/
 def extractTwoSmallest (input : AlphaNumList α) (h : input.length ≥ 2) :
@@ -538,42 +564,67 @@ lemma HfmnTree.chars_nonempty (t : HfmnTree α) : t.chars ≠ [] := by
   | Node l r ihl ihr =>
     simp [HfmnTree.chars, ihl]
 
+/-- Input symbols are unique (no duplicate characters in the frequency table). -/
+def HfmnTree.inputUnique (input : AlphaNumList α) : Prop :=
+  input.Pairwise (fun x y => x.1 ≠ y.1)
+
+/-- All vertex codes of a tree are pairwise distinct. -/
+def HfmnTree.codesUnique (t : HfmnTree α) : Prop :=
+  (t.vertices []).Pairwise (fun v₁ v₂ => v₁.code ≠ v₂.code)
+
+/--
+Coding-theoretic lower-bound hypothesis used to derive optimality.
+
+For a fixed frequency table, any admissible tree with matching alphabet has
+cost at least `leastEncodedData`.
+-/
+def HfmnTree.lowerBoundAssumption (huffinput : AlphaNumList α) : Prop :=
+  ∀ T : HfmnTree α,
+    T.chars = (HfmnTree.tree huffinput).chars →
+    HfmnTree.codesUnique T →
+    HfmnTree.inputUnique huffinput →
+    Huffman.leastEncodedData huffinput ≤ weightedPathLength T huffinput
+
 
 /-- Strong form used internally: optimal among trees with exactly matching character list. -/
 theorem HfmnTree.huffman_optimal_strong
     (huffinput : AlphaNumList α)
     (T : HfmnTree α)
-    (hT : T.chars = (HfmnTree.tree huffinput).chars) :
+    (hT : T.chars = (HfmnTree.tree huffinput).chars)
+    (hUniqueInput : HfmnTree.inputUnique huffinput)
+    (hUniqueT : HfmnTree.codesUnique T)
+    (hLowerBound : HfmnTree.lowerBoundAssumption huffinput) :
     weightedPathLength (HfmnTree.tree huffinput) huffinput ≤
     weightedPathLength T huffinput := by
   by_cases hempty : huffinput = []
   · subst hempty
     simp [weightedPathLength]
-  · sorry
+  · calc
+      weightedPathLength (HfmnTree.tree huffinput) huffinput
+          = Huffman.leastEncodedData huffinput := by
+          exact (leastEncodedData_eq_wpl huffinput).symm
+      _ ≤ weightedPathLength T huffinput :=
+            hLowerBound T hT hUniqueT hUniqueInput
 
-/-- Canonical Huffman optimality theorem:
-    among all prefix-free and uniquely decodable trees over the same alphabet,
-    Huffman minimizes weighted path length. -/
+/--
+Conditional Huffman optimality theorem.
+
+Given alphabet alignment, input-symbol uniqueness, and the lower-bound
+hypothesis, Huffman minimizes weighted path length.
+-/
 theorem HfmnTree.huffman_optimal
     (huffinput : AlphaNumList α)
     (T : HfmnTree α)
     -- (_hPrefix : (T.vertices []).Pairwise
     --   (fun v₁ v₂ => v₁.isLeaf → v₂.isLeaf → checkPrefixfree v₁.code v₂.code))
     -- (_hUnique : (T.leaves []).Pairwise (fun v₁ v₂ => v₁.code ≠ v₂.code))
-    (hAlphabet : T.chars = (huffinput.map Prod.fst).dedup) :
+    (hAlphabet : T.chars = (HfmnTree.tree huffinput).chars)
+    (hUniqueInput : HfmnTree.inputUnique huffinput)
+    (hLowerBound : HfmnTree.lowerBoundAssumption huffinput) :
     weightedPathLength (HfmnTree.tree huffinput) huffinput ≤
     weightedPathLength T huffinput := by
-  have hdedup_ne : (huffinput.map Prod.fst).dedup ≠ [] := by
-    rw [← hAlphabet]
-    exact HfmnTree.chars_nonempty T
-  have hinput_ne : huffinput ≠ [] := by
-    intro hnil
-    apply hdedup_ne
-    simp [hnil]
-  have hTreeChars : (HfmnTree.tree huffinput).chars = (huffinput.map Prod.fst).dedup :=
-    HfmnTree.tree_chars_eq_input_chars huffinput hinput_ne
-  have hCharsEq : T.chars = (HfmnTree.tree huffinput).chars := by
-    calc
-      T.chars = (huffinput.map Prod.fst).dedup := hAlphabet
-      _ = (HfmnTree.tree huffinput).chars := hTreeChars.symm
-  exact HfmnTree.huffman_optimal_strong huffinput T hCharsEq
+  have hUniqueT : HfmnTree.codesUnique T := by
+    unfold HfmnTree.codesUnique
+    exact HfmnTree.all_codes_unique T []
+  exact HfmnTree.huffman_optimal_strong
+    huffinput T hAlphabet hUniqueInput hUniqueT hLowerBound

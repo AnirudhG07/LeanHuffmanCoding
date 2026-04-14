@@ -224,7 +224,7 @@ lemma code_tf_not_prefix (c : BoolList) : ¬ c ++ [true] <+: c ++ [false] := by
 This is true by construction of the tree.
 -/
 @[simp]
-theorem HfmnTree.all_codes_distinct (t : HfmnTree α) (c : BoolList) :
+theorem HfmnTree.all_codes_unique (t : HfmnTree α) (c : BoolList) :
   (t.vertices c).Pairwise (fun v₁ v₂ => v₁.code ≠ v₂.code) := by
   induction p:t with
   | Leaf val wt => grind
@@ -236,8 +236,8 @@ theorem HfmnTree.all_codes_distinct (t : HfmnTree α) (c : BoolList) :
     let cR := c ++ [true]
 
     -- Use IHs on subtrees
-    have pl := HfmnTree.all_codes_distinct l cL
-    have pr := HfmnTree.all_codes_distinct r cR
+    have pl := HfmnTree.all_codes_unique l cL
+    have pr := HfmnTree.all_codes_unique r cR
 
     -- Prove disjointness between left and right vertices
     have disjoint := HfmnTree.codes_disjoint_of_nonprefix l r cL cR

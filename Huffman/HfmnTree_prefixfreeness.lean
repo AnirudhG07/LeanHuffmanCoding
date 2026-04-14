@@ -27,7 +27,7 @@ def HfmnTree.leaves (t : HfmnTree α) (code : BoolList) : List Vertex :=
 theorem HfmnTree.all_leaves_distinct (t : HfmnTree α) (c : BoolList) :
   (t.leaves c).Pairwise (fun v₁ v₂ => v₁.code ≠ v₂.code) := by
   simp [leaves]
-  exact (HfmnTree.all_codes_distinct t c).filter _
+  exact (HfmnTree.all_codes_unique t c).filter _
 
 /- Check if 2 BoolEncList are prefix free of each other. -/
 def checkPrefixfree (bl₁ bl₂: BoolList) : Bool :=
