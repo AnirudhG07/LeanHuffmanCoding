@@ -96,31 +96,8 @@ theorem HfmnTree.hfmntree_is_prefix_free (t : HfmnTree α) (c : BoolList) :
       · intro v₁ hv₁ v₂ hv₂ vl₁ vl₂
         unfold checkPrefixfree
         simp only [List.isPrefixOf_iff_prefix, Bool.decide_and, decide_not, Bool.and_eq_true, Bool.not_eq_eq_eq_not, Bool.not_true, decide_eq_false_iff_not]
-
         have pr₁: (c++ [false]).isPrefixOf v₁.code := by
           exact initialCodeIsPrefix l cL v₁ hv₁
         have pr₂: (c++ [true]).isPrefixOf v₂.code := by
           exact initialCodeIsPrefix r cR v₂ hv₂
-        have cleq : cL.length = cR.length := by
-          exact Eq.symm (List.eq_suff_eq_len c)
-        have cneq : ¬ cL = cR := by
-          unfold cL cR
-          simp only [List.append_cancel_left_eq, List.cons.injEq, Bool.false_eq_true, and_true,
-            not_false_eq_true]
-
-        constructor
-        · intro h₁
-          have h' : (c ++ [false]).isPrefixOf v₂.code := by
-            simp_all
-            exact List.IsPrefix.trans pr₁ h₁
-          have ceq : cL = cR := by
-            exact List.prefix_eqlen_eq cL cR v₂.code cleq h' pr₂
-          contradiction
-
-        · intro h₂
-          have h' : (c ++ [true]).isPrefixOf v₁.code := by
-            simp_all
-            exact List.IsPrefix.trans pr₂ h₂
-          have ceq : cL = cR := by
-            exact List.prefix_eqlen_eq cL cR v₁.code cleq pr₁ h'
-          contradiction
+        grind +suggestions

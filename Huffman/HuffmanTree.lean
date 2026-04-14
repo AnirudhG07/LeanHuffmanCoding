@@ -113,10 +113,7 @@ lemma sorted_nonempty_is_nonempty (trees : List (HfmnTree α)) (h : trees ≠ []
   insertionSort trees ≠ [] := by
   have h₁ : (insertionSort trees).length = trees.length := by
     apply insertionSort_preserves_length
-  have h₂: (insertionSort trees).length > 0 := by
-    rw [h₁]
-    exact List.length_pos_iff.mpr h
-  simp [List.ne_nil_of_length_pos, h₂]
+  grind
 
 
 def String.freq(s : String) (c : Char) := s.toList.filter (· == c) |>.length
@@ -172,11 +169,6 @@ lemma cita_ne_to_ne (s : AlphaNumList α) (h : s ≠ []) :
   intro hi
   have h₁ : (convert_input_to_alphabet s).length = s.length := by
     apply List.length_map
-  have h₂ : (convert_input_to_alphabet s).length = 0 := by
-    exact List.eq_nil_iff_length_eq_zero.mp hi
-  have h₃ : (convert_input_to_alphabet s).length > 0 := by
-    rw [h₁]
-    exact List.length_pos_iff.mpr h
   grind
 
 /-
@@ -198,11 +190,6 @@ def HfmnTree.tree (huffinput : AlphaNumList α) : HfmnTree α :=
       intro h
       have h₁ : (leaves).length = (input).length := by
         apply List.length_map
-      have h₂ : (leaves).length = 0 := by
-        exact List.eq_nil_iff_length_eq_zero.mp h
-      have h₃ : (leaves).length > 0 := by
-        rw [h₁]
-        simp [List.length_pos_iff, hi]
       grind
     let sorted := insertionSort leaves
     have sorted_nonempty : sorted ≠ [] := by grind
@@ -213,13 +200,18 @@ def HfmnTree.tree (huffinput : AlphaNumList α) : HfmnTree α :=
 -- #eval HfmnTree.tree eg₁
 
 /- Returns the set of values in the tree. -/
+@[simp, grind .]
 def HfmnTree.chars: HfmnTree α → List α
   | Leaf c _  => [c]
   | Node l r  => l.chars ++ r.chars
 
 /- Helper function to check if a character is in the tree. -/
+@[simp, grind .]
 def HfmnTree.charInTree (t : HfmnTree α) (c : α) : Bool :=
   t.chars.contains c
+
+lemma HfmnTree.charInTree_iff (t : HfmnTree α) (c : α) : 
+  HfmnTree.charInTree t c = true ↔ c ∈ t.chars := by repeat grind
 
 def HfmnTree.encode (c: α) (t : HfmnTree α) : BoolList :=
   match t with

@@ -123,7 +123,7 @@ theorem HfmnTree.vertices_len_geq (t : HfmnTree α) (code : BoolList) :
     simp [vertices] at hv
     cases hv with
     | refl =>
-      simp [Vertex.code, ge_iff_le, le_refl]
+      simp [Vertex.code, ge_iff_le]
 
   | Node l r ihl ihr =>
     simp [vertices] at hv
@@ -211,7 +211,7 @@ lemma code_ft_not_prefix (c : BoolList) : ¬ c ++ [false] <+: c ++ [true] := by
   have h₂ : c ++ [true] = c ++ [false] := by
     exact Eq.symm (List.IsPrefix.eq_of_length h h₁)
   have h₃ : c ++ [false] ≠ c ++ [true] := by
-    simp only [ne_eq, List.append_cancel_left_eq, List.cons.injEq, Bool.false_eq_true, and_true,not_false_eq_true]
+    simp_all
   grind
 
 @[simp]
