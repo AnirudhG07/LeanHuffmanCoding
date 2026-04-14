@@ -114,6 +114,13 @@ lemma weightedPathLength_eq_sum (t : HfmnTree α) (input : AlphaNumList α) :
           (xs := tl) (a := t.depth a * freq) (b := 0))
     simp [weightedPathLength, weightedPathLengthSum, hfold, ih']
 
+lemma weightedPathLength_perm (t : HfmnTree α)
+  {xs ys : AlphaNumList α} (hperm : xs.Perm ys) :
+    weightedPathLength t xs = weightedPathLength t ys := by
+  rw [weightedPathLength_eq_sum, weightedPathLength_eq_sum]
+  unfold weightedPathLengthSum
+  exact (hperm.map (fun x : α × Nat => t.depth x.1 * x.2)).sum_eq
+
 @[simp]
 lemma List.find?_exists_of_exists_mem {β : Type} (l : List β) (p : β → Bool)
     (h : ∃ x ∈ l, p x = true) :
@@ -931,6 +938,103 @@ theorem exchange_in_tree_of_swap_depths_unique_rest
   exact exchange_in_tree_of_swap_depths
     hf hd (swapLeaves_depth_c1 t c₁ c₂) (swapLeaves_depth_c2 t c₁ c₂) hrest
 
+theorem exchange_in_tree_of_swap_depths_unique_perm
+    {t : HfmnTree α} {input rest : AlphaNumList α}
+    {c₁ c₂ : α} {f₁ f₂ : Nat}
+    (hperm : input.Perm ((c₁, f₁) :: (c₂, f₂) :: rest))
+    (hUnique : HfmnTree.inputUnique ((c₁, f₁) :: (c₂, f₂) :: rest))
+    (hf : f₂ ≤ f₁) (hd : t.depth c₁ ≤ t.depth c₂) :
+    weightedPathLength t input ≤ weightedPathLength (swapLeaves t c₁ c₂) input := by
+  calc
+    weightedPathLength t input
+        = weightedPathLength t ((c₁, f₁) :: (c₂, f₂) :: rest) :=
+          weightedPathLength_perm t hperm
+    _ ≤ weightedPathLength (swapLeaves t c₁ c₂) ((c₁, f₁) :: (c₂, f₂) :: rest) :=
+          exchange_in_tree_of_swap_depths_unique_rest hUnique hf hd
+    _ = weightedPathLength (swapLeaves t c₁ c₂) input := by
+          symm
+          exact weightedPathLength_perm (swapLeaves t c₁ c₂) hperm
+
+inductive HfmnTree.ExchangeStep (input : AlphaNumList α) :
+    HfmnTree α → HfmnTree α → Prop where
+  | mk
+      (t : HfmnTree α)
+      (rest : AlphaNumList α)
+      (c₁ c₂ : α) (f₁ f₂ : Nat)
+      (hperm : input.Perm ((c₁, f₁) :: (c₂, f₂) :: rest))
+      (hUnique : HfmnTree.inputUnique ((c₁, f₁) :: (c₂, f₂) :: rest))
+      (hf : f₂ ≤ f₁)
+      (hd : t.depth c₁ ≤ t.depth c₂) :
+      HfmnTree.ExchangeStep input t (swapLeaves t c₁ c₂)
+
+lemma exchangeStep_nonincrease
+    {input : AlphaNumList α} {t t' : HfmnTree α}
+    (hstep : HfmnTree.ExchangeStep input t t') :
+    weightedPathLength t input ≤ weightedPathLength t' input := by
+  cases hstep with
+  | mk rest c₁ c₂ f₁ f₂ hperm hUnique hf hd =>
+      simpa using
+        (exchange_in_tree_of_swap_depths_unique_perm
+          (t := t) (input := input) (rest := rest)
+          (c₁ := c₁) (c₂ := c₂) (f₁ := f₁) (f₂ := f₂)
+          hperm hUnique hf hd)
+
+lemma exchangeStep_weight_eq
+    {input : AlphaNumList α} {t t' : HfmnTree α}
+    (hstep : HfmnTree.ExchangeStep input t t') :
+    t'.weight = t.weight := by
+  cases hstep with
+  | mk _ _ _ _ _ _ _ _ _ =>
+      simp [swapLeaves_weight]
+
+theorem exchangeSeq_nonincrease
+    {input : AlphaNumList α} {t t' : HfmnTree α}
+    (hseq : Relation.ReflTransGen (HfmnTree.ExchangeStep input) t t') :
+    weightedPathLength t input ≤ weightedPathLength t' input := by
+  induction hseq with
+  | refl =>
+      exact le_rfl
+  | tail htail hstep ih =>
+      exact le_trans ih (exchangeStep_nonincrease hstep)
+
+theorem exchangeSeq_weight_eq
+    {input : AlphaNumList α} {t t' : HfmnTree α}
+    (hseq : Relation.ReflTransGen (HfmnTree.ExchangeStep input) t t') :
+    t'.weight = t.weight := by
+  induction hseq with
+  | refl =>
+      rfl
+  | tail htail hstep ih =>
+      calc
+        _ = _ := exchangeStep_weight_eq hstep
+        _ = _ := ih
+
+theorem exchangeSeq_from_huffman_preserves_weight
+    (huffinput : AlphaNumList α)
+    (T : HfmnTree α)
+    (hseq : Relation.ReflTransGen
+      (HfmnTree.ExchangeStep huffinput)
+      (HfmnTree.tree huffinput) T) :
+    T.weight = (HfmnTree.tree huffinput).weight := by
+  exact exchangeSeq_weight_eq hseq
+
+theorem lowerBoundT_of_exchangeSeq
+    (huffinput : AlphaNumList α)
+    (T : HfmnTree α)
+    (hseq : Relation.ReflTransGen
+      (HfmnTree.ExchangeStep huffinput)
+      (HfmnTree.tree huffinput) T) :
+    Huffman.leastEncodedData huffinput ≤ weightedPathLength T huffinput := by
+  have hmono :
+      weightedPathLength (HfmnTree.tree huffinput) huffinput ≤
+      weightedPathLength T huffinput :=
+    exchangeSeq_nonincrease hseq
+  calc
+    Huffman.leastEncodedData huffinput
+        = weightedPathLength (HfmnTree.tree huffinput) huffinput :=
+          leastEncodedData_eq_wpl huffinput
+    _ ≤ weightedPathLength T huffinput := hmono
+
 /-- All vertex codes of a tree are pairwise distinct. -/
 def HfmnTree.codesUnique (t : HfmnTree α) : Prop :=
   (t.vertices []).Pairwise (fun v₁ v₂ => v₁.code ≠ v₂.code)
@@ -942,13 +1046,17 @@ theorem HfmnTree.huffman_optimal_strong
     (hT : T.chars = (HfmnTree.tree huffinput).chars)
     (hUniqueInput : HfmnTree.inputUnique huffinput)
     (hUniqueT : HfmnTree.codesUnique T)
-    (hLowerBoundT : Huffman.leastEncodedData huffinput ≤ weightedPathLength T huffinput) :
+    (hseq : Relation.ReflTransGen
+      (HfmnTree.ExchangeStep huffinput)
+      (HfmnTree.tree huffinput) T) :
     weightedPathLength (HfmnTree.tree huffinput) huffinput ≤
     weightedPathLength T huffinput := by
   -- Keep these assumptions explicit in the theorem interface.
   let _ := hT
   let _ := hUniqueInput
   let _ := hUniqueT
+  have hLowerBoundT : Huffman.leastEncodedData huffinput ≤ weightedPathLength T huffinput :=
+    lowerBoundT_of_exchangeSeq huffinput T hseq
   by_cases hempty : huffinput = []
   · subst hempty
     simp [weightedPathLength]
@@ -962,22 +1070,61 @@ theorem HfmnTree.huffman_optimal_strong
 /--
 Conditional Huffman optimality theorem.
 
-Given alphabet alignment, input-symbol uniqueness, and the lower-bound
-hypothesis, Huffman minimizes weighted path length.
+Given alphabet alignment, input-symbol uniqueness, and an exchange-sequence
+witness from Huffman's tree to `T`, Huffman minimizes weighted path length.
 -/
 theorem HfmnTree.huffman_optimal
     (huffinput : AlphaNumList α)
     (T : HfmnTree α)
-    -- (_hPrefix : (T.vertices []).Pairwise
-    --   (fun v₁ v₂ => v₁.isLeaf → v₂.isLeaf → checkPrefixfree v₁.code v₂.code))
-    -- (_hUnique : (T.leaves []).Pairwise (fun v₁ v₂ => v₁.code ≠ v₂.code))
     (hAlphabet : T.chars = (HfmnTree.tree huffinput).chars)
     (hUniqueInput : HfmnTree.inputUnique huffinput)
-    (hLowerBoundT : Huffman.leastEncodedData huffinput ≤ weightedPathLength T huffinput) :
+    (hseq : Relation.ReflTransGen
+      (HfmnTree.ExchangeStep huffinput)
+      (HfmnTree.tree huffinput) T) :
     weightedPathLength (HfmnTree.tree huffinput) huffinput ≤
     weightedPathLength T huffinput := by
   have hUniqueT : HfmnTree.codesUnique T := by
     unfold HfmnTree.codesUnique
     exact HfmnTree.all_codes_unique T []
   exact HfmnTree.huffman_optimal_strong
-    huffinput T hAlphabet hUniqueInput hUniqueT hLowerBoundT
+    huffinput T hAlphabet hUniqueInput hUniqueT hseq
+
+/--
+Global exchange-connectivity hypothesis for an input: every admissible tree
+can be reached from the Huffman tree by exchange steps.
+-/
+def HfmnTree.ExchangeComplete (huffinput : AlphaNumList α) : Prop :=
+  ∀ T : HfmnTree α,
+    T.chars = (HfmnTree.tree huffinput).chars →
+    Relation.ReflTransGen
+      (HfmnTree.ExchangeStep huffinput)
+      (HfmnTree.tree huffinput) T
+
+theorem HfmnTree.exchangeComplete_implies_weight_alignment
+    (huffinput : AlphaNumList α)
+    (hComplete : HfmnTree.ExchangeComplete huffinput)
+    (T : HfmnTree α)
+    (hAlphabet : T.chars = (HfmnTree.tree huffinput).chars) :
+    T.weight = (HfmnTree.tree huffinput).weight := by
+  exact exchangeSeq_from_huffman_preserves_weight huffinput T (hComplete T hAlphabet)
+
+/--
+Huffman optimality under a global exchange-connectivity theorem.
+
+This isolates the final missing combinatorial ingredient: proving
+`HfmnTree.ExchangeComplete huffinput` from structural admissibility
+conditions.
+-/
+theorem HfmnTree.huffman_optimal_of_exchangeComplete
+    (huffinput : AlphaNumList α)
+    (hComplete : HfmnTree.ExchangeComplete huffinput)
+    (T : HfmnTree α)
+    (hAlphabet : T.chars = (HfmnTree.tree huffinput).chars)
+    (hUniqueInput : HfmnTree.inputUnique huffinput) :
+    weightedPathLength (HfmnTree.tree huffinput) huffinput ≤
+    weightedPathLength T huffinput := by
+  have hseq : Relation.ReflTransGen
+      (HfmnTree.ExchangeStep huffinput)
+      (HfmnTree.tree huffinput) T :=
+    hComplete T hAlphabet
+  exact HfmnTree.huffman_optimal huffinput T hAlphabet hUniqueInput hseq
