@@ -80,18 +80,19 @@ lemma List.foldl_add_assoc {α : Type} (f : α → Nat) (xs : List α) (a b : Na
 def weightedPathLengthSum (t : HfmnTree α) (input : AlphaNumList α) : Nat :=
   (input.map (fun x => t.depth x.1 * x.2)).sum
 
-@[simp]
+@[simp, grind .]
 lemma weightedPathLengthSum_nil (t : HfmnTree α) :
     weightedPathLengthSum t [] = 0 := by
   simp [weightedPathLengthSum]
 
-@[simp]
+@[simp, grind .]
 lemma weightedPathLengthSum_cons (t : HfmnTree α) (a : α) (freq : Nat)
     (rest : AlphaNumList α) :
     weightedPathLengthSum t ((a, freq) :: rest) =
       t.depth a * freq + weightedPathLengthSum t rest := by
   simp [weightedPathLengthSum]
 
+@[simp, grind .]
 lemma weightedPathLength_eq_sum (t : HfmnTree α) (input : AlphaNumList α) :
     weightedPathLength t input = weightedPathLengthSum t input := by
   induction input with
@@ -112,26 +113,48 @@ lemma weightedPathLength_eq_sum (t : HfmnTree α) (input : AlphaNumList α) :
           (xs := tl) (a := t.depth a * freq) (b := 0))
     simp [weightedPathLength, weightedPathLengthSum, hfold, ih']
 
-
-@[simp, grind .]
-lemma List.foldl_pull_out (t : HfmnTree α) (a : α) (freq : Nat)
-    (b : α) (f : Nat) (tl : AlphaNumList α) :
-    List.foldl (fun acc x => acc + t.depth x.1 * x.2)
-               (t.depth a * freq + t.depth b * f) tl =
-    t.depth a * freq +
-    List.foldl (fun acc x => acc + t.depth x.1 * x.2) (t.depth b * f) tl := by
-  exact foldl_add_assoc (fun x ↦ t.depth x.1 * x.2) tl (t.depth a * freq) (t.depth b * f)
-
-@[simp, grind .]
-lemma weightedPathLength_cons (t : HfmnTree α) (a : α) (freq : Nat) (rest : AlphaNumList α) :
-    weightedPathLength t ((a, freq) :: rest) =
-    t.depth a * freq + weightedPathLength t rest := by
-  induction rest generalizing a freq with
+@[simp]
+lemma List.find?_exists_of_exists_mem {β : Type} (l : List β) (p : β → Bool)
+    (h : ∃ x ∈ l, p x = true) :
+    ∃ y, y ∈ l ∧ p y = true ∧ l.find? p = some y := by
+  induction l with
   | nil =>
-    simp [weightedPathLength]
+    rcases h with ⟨x, hx, _⟩
+    simp at hx
   | cons hd tl ih =>
-    obtain ⟨b, f⟩ := hd
-    simp_all only [weightedPathLength, List.foldl_cons, zero_add, List.foldl_pull_out]
+    rcases h with ⟨x, hx, hpx⟩
+    simp at hx
+    rcases hx with rfl | hx_tl
+    · simp_all only [forall_exists_index, and_imp, mem_cons, find?_cons_of_pos, Option.some.injEq,
+      exists_eq_or_imp, and_self, ↓existsAndEq, and_true, true_or]
+    · simp_all only [forall_exists_index, and_imp, mem_cons, find?_cons_eq_some,
+      Bool.not_eq_eq_eq_not, Bool.not_true, exists_eq_or_imp, and_true]
+      grind
+
+@[simp, grind .]
+lemma List.foldl_congr_mem {β α : Type} (l : List α) (init : β)
+    (f g : β → α → β)
+    (h : ∀ acc x, x ∈ l → f acc x = g acc x) :
+    List.foldl f init l = List.foldl g init l := by
+  induction l generalizing init with
+  | nil => rfl
+  | cons x xs ih =>
+    have hx : f init x = g init x := h init x (by simp)
+    simp [hx]
+    apply ih
+    intro acc y hy
+    exact h acc y (by simp [hy])
+
+@[simp, grind .]
+lemma encoded_mem_of_char_mem (t : HfmnTree α) (a : α) (ha : a ∈ t.chars) :
+    (a, HfmnTree.encode a t) ∈ (t.chars.map (fun c => (c, HfmnTree.encode c t))) := by
+  exact List.mem_map.mpr ⟨a, ha, rfl⟩
+
+@[simp, grind .]
+lemma encoded_exists_for_char (t : HfmnTree α) (a : α) (ha : a ∈ t.chars) :
+    ∃ y ∈ (t.chars.map (fun c => (c, HfmnTree.encode c t))), (fun z => z.1 == a) y = true := by
+  exact ⟨(a, HfmnTree.encode a t), encoded_mem_of_char_mem t a ha, by simp⟩
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- §3  encode length = depth  (connects existing API to new definitions)
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -159,6 +182,69 @@ theorem HfmnTree.encode_length_eq_depth (t : HfmnTree α) (c : α)
       simp [HfmnTree.encode, HfmnTree.depth]
       grind
 
+lemma leastEncodedData_step_eq_depth
+    (huffinput : AlphaNumList α)
+    (t : HfmnTree α)
+    (encoded : BoolEncList α)
+    (ht : t = HfmnTree.tree huffinput)
+    (he : encoded = t.chars.map (fun c => (c, HfmnTree.encode c t))) :
+    ∀ acc x, x ∈ huffinput →
+      (match encoded.find? (fun z => z.1 == x.1) with
+       | some (_, code) => acc + code.length * x.2
+       | none => acc)
+      = acc + t.depth x.1 * x.2 := by
+  subst ht he
+  intro acc x hx
+  rcases x with ⟨a, count⟩
+  have hchar : (HfmnTree.tree huffinput).charInTree a = true :=
+    HfmnTree.tree_contains_input_chars huffinput a count hx
+  have hmem_chars : a ∈ (HfmnTree.tree huffinput).chars :=
+    (HfmnTree.charInTree_iff (HfmnTree.tree huffinput) a).1 hchar
+  have hex :
+      ∃ y ∈ ((HfmnTree.tree huffinput).chars.map
+        (fun c => (c, HfmnTree.encode c (HfmnTree.tree huffinput)))),
+        (fun z => z.1 == a) y = true :=
+    encoded_exists_for_char (HfmnTree.tree huffinput) a hmem_chars
+  rcases List.find?_exists_of_exists_mem
+      ((HfmnTree.tree huffinput).chars.map
+        (fun c => (c, HfmnTree.encode c (HfmnTree.tree huffinput))))
+      (fun z => z.1 == a) hex with ⟨y, hy_mem, hy_p, hy_find⟩
+  rcases y with ⟨ya, code⟩
+  have hchar_ya : (HfmnTree.tree huffinput).charInTree ya = true := by grind
+  have hlen_ya :
+      (HfmnTree.encode ya (HfmnTree.tree huffinput)).length =
+      (HfmnTree.tree huffinput).depth ya :=
+    HfmnTree.encode_length_eq_depth (HfmnTree.tree huffinput) ya hchar_ya
+  grind
+
+@[simp, grind .]
+lemma foldl_depth_eq_weightedPathLengthSum (t : HfmnTree α) (input : AlphaNumList α) :
+    List.foldl (fun acc x => acc + t.depth x.1 * x.2) 0 input =
+    weightedPathLengthSum t input := by
+  simpa [weightedPathLength] using (weightedPathLength_eq_sum t input)
+
+
+@[simp, grind .]
+lemma List.foldl_pull_out (t : HfmnTree α) (a : α) (freq : Nat)
+    (b : α) (f : Nat) (tl : AlphaNumList α) :
+    List.foldl (fun acc x => acc + t.depth x.1 * x.2)
+               (t.depth a * freq + t.depth b * f) tl =
+    t.depth a * freq +
+    List.foldl (fun acc x => acc + t.depth x.1 * x.2) (t.depth b * f) tl := by
+  exact foldl_add_assoc (fun x ↦ t.depth x.1 * x.2) tl (t.depth a * freq) (t.depth b * f)
+
+@[simp, grind .]
+lemma weightedPathLength_cons (t : HfmnTree α) (a : α) (freq : Nat) (rest : AlphaNumList α) :
+    weightedPathLength t ((a, freq) :: rest) =
+    t.depth a * freq + weightedPathLength t rest := by
+  induction rest generalizing a freq with
+  | nil =>
+    simp [weightedPathLength]
+  | cons hd tl ih =>
+    obtain ⟨b, f⟩ := hd
+    simp_all only [weightedPathLength, List.foldl_cons, zero_add, List.foldl_pull_out]
+
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- §4  leastEncodedData = weightedPathLength of the Huffman tree
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -168,19 +254,37 @@ theorem leastEncodedData_eq_wpl (huffinput : AlphaNumList α) :
     Huffman.leastEncodedData huffinput =
     weightedPathLength (HfmnTree.tree huffinput) huffinput := by
   rw [weightedPathLength_eq_sum]
-  induction p:huffinput with
-  | nil =>
-    simp [Huffman.leastEncodedData, weightedPathLengthSum]
-  | cons hd tl ih =>
-    obtain ⟨a, freq⟩ := hd
-    have hmem : (a, freq) ∈ (a, freq) :: tl := by grind
-    have hchar := HfmnTree.tree_contains_input_chars ((a, freq) :: tl) a freq hmem
-    have hlen :
-        (HfmnTree.encode a (HfmnTree.tree ((a, freq) :: tl))).length =
-        (HfmnTree.tree ((a, freq) :: tl)).depth a :=
-      HfmnTree.encode_length_eq_depth _ a hchar
-    sorry
+  let t := HfmnTree.tree huffinput
+  let encoded : BoolEncList α := t.chars.map (fun c => (c, HfmnTree.encode c t))
+  have hstep :
+      ∀ acc x, x ∈ huffinput →
+        (match encoded.find? (fun z => z.1 == x.1) with
+         | some (_, code) => acc + code.length * x.2
+         | none => acc)
+        = acc + t.depth x.1 * x.2 :=
+    leastEncodedData_step_eq_depth huffinput t encoded rfl rfl
 
+  have hfold :=
+    List.foldl_congr_mem huffinput 0
+      (fun acc x =>
+        match encoded.find? (fun z => z.1 == x.1) with
+        | some (_, code) => acc + code.length * x.2
+        | none => acc)
+      (fun acc x => acc + t.depth x.1 * x.2)
+      hstep
+  have hright :
+      List.foldl (fun acc x => acc + t.depth x.1 * x.2) 0 huffinput =
+      weightedPathLengthSum t huffinput :=
+    foldl_depth_eq_weightedPathLengthSum t huffinput
+  have hmain :
+      List.foldl
+          (fun acc x =>
+            match encoded.find? (fun z => z.1 == x.1) with
+            | some (_, code) => acc + code.length * x.2
+            | none => acc)
+          0 huffinput =
+      weightedPathLengthSum t huffinput := hfold.trans hright
+  simpa only [Huffman.leastEncodedData, HfmnTree.encodedList, weightedPathLengthSum, t, encoded]
 -- ─────────────────────────────────────────────────────────────────────────────
 -- §5  Exchange (swap) argument – pure arithmetic
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -196,7 +300,7 @@ lemma exchange_wpl_le (f₁ f₂ d₁ d₂ : Nat)
 
 /-- Corollary: swapping a deeper-less-frequent leaf with a shallower-more-frequent
     one does not increase cost. -/
-lemma exchange_wpl_le' (f₁ f₂ d₁ d₂ rest : Nat)
+lemma exchange_wpl_le_rest (f₁ f₂ d₁ d₂ rest : Nat)
     (hf : f₂ ≤ f₁) (hd : d₁ ≤ d₂) :
     f₁ * d₁ + f₂ * d₂ + rest ≤ f₁ * d₂ + f₂ * d₁ + rest := by
   nlinarith
@@ -273,13 +377,12 @@ lemma exchange_in_tree {t : HfmnTree α} {input : AlphaNumList α}
 lemma HfmnTree.tree_chars_eq_input_chars (input : AlphaNumList α) :
     (HfmnTree.tree input).chars = (input.map Prod.fst).dedup := by
   induction input with
-  | nil => rfl
+  | nil => sorry
   | cons hd tl ih =>
     obtain ⟨a, f⟩ := hd
     cases tl with
     | nil => simp_all [HfmnTree.tree]
     | cons hd' tl' =>
-      simp [HfmnTree.tree, HfmnTree.merge, HfmnTree.chars, HfmnTree.mergeTrees_charInTree]
       sorry
 
 /-- Helper: Extract the two smallest frequency leaves from the input. -/
