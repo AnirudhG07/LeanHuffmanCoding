@@ -18,6 +18,83 @@ abbrev AlphaNumList (α : Type) := List (α × Nat)
 abbrev BoolEncList (α : Type) := List (α × BoolList)
 abbrev TypeEncodedList (α : Type) := List (α × String)
 
+namespace AlphaNumList
+
+variable {α : Type}
+
+/-- Input alphabet as a list of symbols (first projections of `(symbol, freq)` pairs). -/
+@[simp]
+def symbols (input : AlphaNumList α) : List α :=
+  input.map Prod.fst
+
+/-- Sum of all frequencies in the input table. -/
+@[simp]
+def totalFreq (input : AlphaNumList α) : Nat :=
+  input.foldl (fun acc x => acc + x.2) 0
+
+/-- No duplicate symbols in the input table. -/
+def WellFormed (input : AlphaNumList α) : Prop :=
+  input.symbols.Nodup
+
+/-- All frequencies are strictly positive. -/
+def Positive (input : AlphaNumList α) : Prop :=
+  ∀ a f, (a, f) ∈ input → 0 < f
+
+/-- Canonical bundle used in final theorem assumptions. -/
+def Valid (input : AlphaNumList α) : Prop :=
+  WellFormed input ∧ Positive input
+
+/-- Lookup frequency of symbol `a` in an input table (`0` if absent). -/
+@[simp]
+def lookupFreq [DecidableEq α] (input : AlphaNumList α) (a : α) : Nat :=
+  match input.find? (fun x => x.1 == a) with
+  | some (_, f) => f
+  | none => 0
+
+@[simp]
+lemma symbols_nil : symbols ([] : AlphaNumList α) = [] := rfl
+
+@[simp]
+lemma symbols_cons (x : α × Nat) (xs : AlphaNumList α) :
+    symbols (x :: xs) = x.1 :: symbols xs := rfl
+
+@[simp]
+lemma totalFreq_nil : totalFreq ([] : AlphaNumList α) = 0 := rfl
+
+lemma totalFreq_cons (x : α × Nat) (xs : AlphaNumList α) :
+    totalFreq (x :: xs) = x.2 + totalFreq xs := by
+  unfold totalFreq
+  have haux : ∀ (ys : AlphaNumList α) (n : Nat),
+      List.foldl (fun acc x => acc + x.2) n ys =
+      n + List.foldl (fun acc x => acc + x.2) 0 ys := by
+    intro ys n
+    induction ys generalizing n with
+    | nil =>
+        simp
+    | cons y ys ih =>
+      grind
+  simpa using haux xs x.2
+
+lemma mem_symbols_iff {a : α} {input : AlphaNumList α} :
+    a ∈ symbols input ↔ ∃ f, (a, f) ∈ input := by
+  constructor
+  · intro ha
+    exact List.mem_map.1 ha |> fun ⟨x, hx, hxeq⟩ => by grind
+  · intro h
+    rcases h with ⟨f, hf⟩
+    exact List.mem_map.2 ⟨(a, f), hf, rfl⟩
+
+lemma not_mem_symbols_iff {a : α} {input : AlphaNumList α} :
+    a ∉ symbols input ↔ ∀ f, (a, f) ∉ input := by
+  constructor
+  · intro hnot f hf
+    exact hnot ((mem_symbols_iff).2 ⟨f, hf⟩)
+  · intro hnot hmem
+    rcases (mem_symbols_iff).1 hmem with ⟨f, hf⟩
+    exact hnot f hf
+
+end AlphaNumList
+
 /-
 Defined a Typeclass for the type of the inputs in the Huffman tree. Since decoding would be primarlity on strings or integer inputs, they are all decidable, ordered and inhabited.
 -/
@@ -420,6 +497,10 @@ This should be our final goal, to show for a huffman tree, the decoding of the e
 -/
 def HfmnTree.decode (enc_boolinput : BoolList) (enc_huffinput : List (α × BoolList)) : Option α :=
   enc_huffinput.find? (λ (_, s) => s = enc_boolinput) |>.map (·.1)
+
+/-- A tree is admissible for an input if it encodes exactly the same symbol list. -/
+def AdmissibleToInput (input : AlphaNumList α) (t : HfmnTree α) : Prop :=
+  t.chars.Perm (AlphaNumList.symbols input)
 
 -- #eval HfmnTree.decode "1" ( HfmnTree.encoded_tree eg₁ ).1 -- none
 -- #eval HfmnTree.decode "0" ( HfmnTree.encoded_tree eg₁ ).1 -- some 'a'

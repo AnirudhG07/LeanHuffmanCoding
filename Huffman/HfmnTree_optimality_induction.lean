@@ -142,22 +142,14 @@ lemma HfmnTree.leaf_code_length_pos_of_mem_node_leaves
       (v ∈ l.vertices [false] ∧ v.isLeaf = true) ∨
       (v ∈ r.vertices [true] ∧ v.isLeaf = true) := by
     rcases hvin with ⟨hmem, hisLeaf⟩
-    have hmem' : v = Vertex.Node [] ∨ v ∈ l.vertices [false] ∨ v ∈ r.vertices [true] := by
-      simpa [HfmnTree.vertices] using hmem
-    rcases hmem' with hroot | hL | hR
-    · subst hroot
-      simp [Vertex.isLeaf] at hisLeaf
-    · exact Or.inl ⟨hL, hisLeaf⟩
-    · exact Or.inr ⟨hR, hisLeaf⟩
+    grind
   rcases hvcases with ⟨hvL, _⟩ | ⟨hvR, _⟩
   · have hlen : v.code.length ≥ [false].length :=
       HfmnTree.vertices_len_geq l [false] v hvL
-    simp at hlen
-    omega
+    grind
   · have hlen : v.code.length ≥ [true].length :=
       HfmnTree.vertices_len_geq r [true] v hvR
-    simp at hlen
-    omega
+    grind
 
 /--
 When there are at least two characters, a deepest leaf has positive code length.
@@ -560,42 +552,13 @@ lemma HfmnTree.exists_leaf_extension_of_node_prefix_branch
                 HfmnTree.node_mem_left_of_code_false l r c ps (by
                   simpa [List.append_assoc] using hnode)
               rcases ih (t := l) (c := c ++ [false]) hnodeL with ⟨s, hs⟩
-              refine ⟨s, ?_⟩
-              have hsV :
-                  Vertex.Leaf (((c ++ [false]) ++ ps) ++ [b] ++ s) ∈ l.vertices (c ++ [false]) :=
-                (HfmnTree.mem_leaves_iff l (c ++ [false]) _).1 hs |>.1
-              have hsV' :
-                  Vertex.Leaf (c ++ false :: (ps ++ b :: s)) ∈ l.vertices (c ++ [false]) := by
-                simpa [List.append_assoc] using hsV
-              have hsNodeV :
-                  Vertex.Leaf (c ++ false :: (ps ++ b :: s)) ∈ (HfmnTree.Node l r).vertices c := by
-                simp [HfmnTree.vertices, hsV']
-              have hsNode :
-                  Vertex.Leaf (c ++ false :: (ps ++ b :: s)) ∈ (HfmnTree.Node l r).leaves c := by
-                exact (HfmnTree.mem_leaves_iff (HfmnTree.Node l r) c _).2
-                  ⟨hsNodeV, by simp [Vertex.isLeaf]⟩
-              simpa [List.append_assoc] using hsNode
+              grind
           | true =>
               have hnodeR :
                   Vertex.Node ((c ++ [true]) ++ ps) ∈ r.vertices (c ++ [true]) :=
                 HfmnTree.node_mem_right_of_code_true l r c ps (by
                   simpa [List.append_assoc] using hnode)
-              rcases ih (t := r) (c := c ++ [true]) hnodeR with ⟨s, hs⟩
-              refine ⟨s, ?_⟩
-              have hsV :
-                  Vertex.Leaf (((c ++ [true]) ++ ps) ++ [b] ++ s) ∈ r.vertices (c ++ [true]) :=
-                (HfmnTree.mem_leaves_iff r (c ++ [true]) _).1 hs |>.1
-              have hsV' :
-                  Vertex.Leaf (c ++ true :: (ps ++ b :: s)) ∈ r.vertices (c ++ [true]) := by
-                simpa [List.append_assoc] using hsV
-              have hsNodeV :
-                  Vertex.Leaf (c ++ true :: (ps ++ b :: s)) ∈ (HfmnTree.Node l r).vertices c := by
-                simp [HfmnTree.vertices, hsV']
-              have hsNode :
-                  Vertex.Leaf (c ++ true :: (ps ++ b :: s)) ∈ (HfmnTree.Node l r).leaves c := by
-                exact (HfmnTree.mem_leaves_iff (HfmnTree.Node l r) c _).2
-                  ⟨hsNodeV, by simp [Vertex.isLeaf]⟩
-              simpa [List.append_assoc] using hsNode
+              grind
 
 lemma BoolList.suffix_nil_of_length_le
     (p s : BoolList) (b₁ b₂ : Bool)
@@ -604,10 +567,7 @@ lemma BoolList.suffix_nil_of_length_le
   have hlen : p.length + 1 + s.length ≤ p.length + 1 := by
     simpa [List.length_append, Nat.add_assoc, Nat.add_left_comm, Nat.add_comm] using h
   have hs0 : s.length = 0 := by omega
-  cases s with
-  | nil => rfl
-  | cons x xs =>
-      simp at hs0
+  grind
 
 /--
 There exists a sibling leaf pair whose depth is maximal among all leaves.
@@ -819,6 +779,30 @@ theorem HfmnTree.exists_deepest_sibling_leaf_pair_with_properties_of_chars_ge_tw
   have hpos : 0 < (Vertex.Leaf (p ++ [false])).code.length :=
     (sibling_leaf_code_length_pos p).1
   exact ⟨p, hfalse, htrue, hneq, hpf, hlen, hpos, hmax⟩
+
+/--
+Concrete reduced-class candidate for the induction route:
+either the tree has at most one symbol, or it has a deepest sibling leaf pair.
+-/
+def HfmnTree.DeepestSiblingClass (t : HfmnTree α) : Prop :=
+  t.chars.length ≤ 1 ∨
+  ∃ p,
+    Vertex.Leaf (p ++ [false]) ∈ t.leaves [] ∧
+    Vertex.Leaf (p ++ [true]) ∈ t.leaves [] ∧
+    (∀ u, u ∈ t.leaves [] → u.code.length ≤ (Vertex.Leaf (p ++ [false])).code.length)
+
+/--
+Every tree is in `DeepestSiblingClass`: small trees satisfy the first branch,
+and nontrivial trees satisfy the deepest-sibling branch.
+-/
+theorem HfmnTree.deepestSiblingClass_all (t : HfmnTree α) :
+    HfmnTree.DeepestSiblingClass t := by
+  by_cases hsmall : t.chars.length ≤ 1
+  · exact Or.inl hsmall
+  · have hchars : 2 ≤ t.chars.length := by omega
+    rcases HfmnTree.exists_deepest_sibling_leaf_pair_of_chars_ge_two t hchars with
+      ⟨p, hfalse, htrue, hmax⟩
+    exact Or.inr ⟨p, hfalse, htrue, hmax⟩
 
 /-- Code-tree shape with labels only (no stored frequencies). -/
 inductive CodeTree (α : Type) where
