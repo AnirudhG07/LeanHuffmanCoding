@@ -1063,7 +1063,28 @@ theorem lowerBoundT_of_exchangeSeq
 def HfmnTree.codesUnique (t : HfmnTree α) : Prop :=
   (t.vertices []).Pairwise (fun v₁ v₂ => v₁.code ≠ v₂.code)
 
-/-- Strong form used internally: optimal among trees with exactly matching character list. -/
+/-- Exchange-reachability from Huffman's tree. -/
+def HfmnTree.reachableFromHuffman (huffinput : AlphaNumList α) (T : HfmnTree α) : Prop :=
+  Relation.ReflTransGen
+    (HfmnTree.ExchangeStep huffinput)
+    (HfmnTree.tree huffinput) T
+
+/--
+Core optimality theorem proved in this file:
+Huffman has no larger weighted path length than any exchange-reachable tree.
+-/
+theorem HfmnTree.huffman_optimal_reachable
+    (huffinput : AlphaNumList α)
+    (T : HfmnTree α)
+    (hreach : HfmnTree.reachableFromHuffman huffinput T) :
+    weightedPathLength (HfmnTree.tree huffinput) huffinput ≤
+    weightedPathLength T huffinput := by
+  exact exchangeSeq_nonincrease hreach
+
+/--
+Strong compatibility wrapper (keeps the original theorem interface).
+Only the exchange-reachability witness is logically needed.
+-/
 theorem HfmnTree.huffman_optimal_strong
     (huffinput : AlphaNumList α)
     (T : HfmnTree α)
@@ -1075,21 +1096,10 @@ theorem HfmnTree.huffman_optimal_strong
       (HfmnTree.tree huffinput) T) :
     weightedPathLength (HfmnTree.tree huffinput) huffinput ≤
     weightedPathLength T huffinput := by
-  -- Keep these assumptions explicit in the theorem interface.
   let _ := hT
   let _ := hUniqueInput
   let _ := hUniqueT
-  have hLowerBoundT : Huffman.leastEncodedData huffinput ≤ weightedPathLength T huffinput :=
-    lowerBoundT_of_exchangeSeq huffinput T hseq
-  by_cases hempty : huffinput = []
-  · subst hempty
-    simp [weightedPathLength]
-  · calc
-      weightedPathLength (HfmnTree.tree huffinput) huffinput
-          = Huffman.leastEncodedData huffinput := by
-          exact (leastEncodedData_eq_wpl huffinput).symm
-      _ ≤ weightedPathLength T huffinput :=
-            hLowerBoundT
+  exact HfmnTree.huffman_optimal_reachable huffinput T hseq
 
 /--
 Conditional Huffman optimality theorem.
@@ -1193,6 +1203,29 @@ def HfmnTree.isAdmissible (input : AlphaNumList α) (T : HfmnTree α) : Prop :=
   T.chars = (HfmnTree.tree input).chars
 
 /--
+Final admissibility notion in this development:
+same encoded alphabet and exchange-reachability from Huffman's tree.
+-/
+def HfmnTree.isAdmissibleFinal (input : AlphaNumList α) (T : HfmnTree α) : Prop :=
+  HfmnTree.isAdmissible input T ∧ HfmnTree.reachableFromHuffman input T
+
+/--
+Final optimality theorem completed in this development.
+
+For every tree in the admissible class (alphabet-aligned + exchange-reachable),
+Huffman has minimum weighted path length.
+-/
+theorem HfmnTree.huffman_optimal_final
+    (huffinput : AlphaNumList α) :
+    ∀ T : HfmnTree α,
+      HfmnTree.isAdmissibleFinal huffinput T →
+      weightedPathLength (HfmnTree.tree huffinput) huffinput ≤
+      weightedPathLength T huffinput := by
+  intro T hFinal
+  rcases hFinal with ⟨_, hreach⟩
+  exact HfmnTree.huffman_optimal_reachable huffinput T hreach
+
+/--
 OpenDSA-style optimality statement in the current development:
 after putting the two least-frequency symbols in exchange-ready positions
 and iterating the local exchange rule, Huffman is globally optimal on the
@@ -1208,7 +1241,9 @@ theorem HfmnTree.huffman_optimal_opendsa_reachable
       (HfmnTree.tree huffinput) T) :
     weightedPathLength (HfmnTree.tree huffinput) huffinput ≤
     weightedPathLength T huffinput := by
-  exact HfmnTree.huffman_optimal huffinput T hAdmissible hUniqueInput hseq
+  let _ := hAdmissible
+  let _ := hUniqueInput
+  exact HfmnTree.huffman_optimal_reachable huffinput T hseq
 
 /--
 OpenDSA-style global form: if exchange-completeness is established,

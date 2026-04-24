@@ -1,5 +1,7 @@
 import Cli
 import Huffman.HuffmanTree
+import Huffman.HfmnTree_optimality_final
+import Huffman.HfmnTree_optimality_induction
 open Cli
 
 -- This has already been defined. You can change the example as per your wish.
