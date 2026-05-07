@@ -444,7 +444,7 @@ def HfmnTree.toProofTree (huffinput : AlphaNumList α) : HfmnTree α → Huffman
   | .Leaf a _ => HuffmanTree.leaf (AlphaNumList.lookupFreq huffinput a) a
   | .Node l r => HuffmanTree.node 0 (HfmnTree.toProofTree huffinput l) (HfmnTree.toProofTree huffinput r)
 
-@[simp]
+@[simp, grind .]
 lemma HfmnTree.alphabet_toProofTree (huffinput : AlphaNumList α) (t : HfmnTree α) :
     alphabet (HfmnTree.toProofTree huffinput t) = t.chars.toFinset := by
   induction t with
@@ -454,7 +454,7 @@ lemma HfmnTree.alphabet_toProofTree (huffinput : AlphaNumList α) (t : HfmnTree 
       simp [HfmnTree.toProofTree, HfmnTree.chars, alphabet, ihl, ihr]
 
 /- Public constructor: canonical proof-side Huffman algorithm, re-exposed as `HfmnTree`. -/
-@[simp]
+@[simp, grind .]
 def HfmnTree.tree (huffinput : AlphaNumList α) : HfmnTree α :=
   if h : huffinput = [] then
     HfmnTree.Leaf HfmnType.default 0

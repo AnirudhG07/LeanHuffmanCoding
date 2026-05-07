@@ -91,6 +91,7 @@ lemma sibling_ne_imp_sibling_in_alphabet {α} [DecidableEq α]
 /--
 A custom induction rule for Huffman trees using sibling and consistency.
 It is used to simplify proofs.
+-- adapted from another project for Huffman
 -/
 theorem sibling_induct_consistent {α} [DecidableEq α]
   {P : (t : HuffmanTree α) → α → consistent t → Prop}
@@ -101,7 +102,7 @@ theorem sibling_induct_consistent {α} [DecidableEq α]
   (h_consistent : consistent (HuffmanTree.node w (HuffmanTree.leaf wb b) (HuffmanTree.leaf wc c))),
     b ≠ c → P (HuffmanTree.node w (HuffmanTree.leaf wb b) (HuffmanTree.leaf wc c)) a h_consistent)
   (step21 : ∀ w t1 t2 (h_consistent : consistent (HuffmanTree.node w t1 t2))
-    (h_consistent_t1 : consistent t1) (h_consistent_t2 : consistent t2),
+    (h_consistent_t1 : consistent t1),
     alphabet t1 ∩ alphabet t2 = ∅ →
     (height t1 > 0 ∨ height t2 > 0) →
     a ∈ alphabet t1 →
@@ -111,7 +112,7 @@ theorem sibling_induct_consistent {α} [DecidableEq α]
     P t1 a h_consistent_t1 →
     P (HuffmanTree.node w t1 t2) a h_consistent)
   (step22 : ∀ w t1 t2 (h_consistent : consistent (HuffmanTree.node w t1 t2))
-    (h_consistent_t1 : consistent t1) (h_consistent_t2 : consistent t2),
+    (h_consistent_t2 : consistent t2),
     alphabet t1 ∩ alphabet t2 = ∅ →
     (height t1 > 0 ∨ height t2 > 0) →
     a ∉ alphabet t1 →
@@ -120,8 +121,7 @@ theorem sibling_induct_consistent {α} [DecidableEq α]
     sibling t2 a ∈ alphabet t2 →
     P t2 a h_consistent_t2 →
     P (HuffmanTree.node w t1 t2) a h_consistent)
-  (step23 : ∀ w t1 t2 (h_consistent : consistent (HuffmanTree.node w t1 t2))
-    (h_consistent_t1 : consistent t1) (h_consistent_t2 : consistent t2),
+  (step23 : ∀ w t1 t2 (h_consistent : consistent (HuffmanTree.node w t1 t2)),
     alphabet t1 ∩ alphabet t2 = ∅ →
     (height t1 > 0 ∨ height t2 > 0) →
     a ∉ alphabet t1 →
@@ -356,8 +356,7 @@ lemma cachedWeight_splitLeaf {α : Type} [DecidableEq α]
 @[simp]
 lemma splitLeafF_insortTree_when_in_alphabet_left {α : Type} [DecidableEq α]
   (t : HuffmanTree α) (ts : Forest α) (a b : α) (wa wb : Nat)
-  (h_a : a ∈ alphabet t) (h_consistent : consistent t)
-  (h_a_ts : a ∉ alphabetF ts) (h_freq : freq t a = wa + wb) :
+  (h_a_ts : a ∉ alphabetF ts) :
   splitLeafF (insortTree t ts) wa a wb b =
     insortTree (splitLeaf t wa a wb b) ts := by
   induction ts <;> aesop (add norm [splitLeaf, splitLeafF, insortTree, alphabetF, alphabet])
@@ -686,28 +685,42 @@ lemma freq_swapFourSyms {α} [DecidableEq α]
 Sibling relationships is preserved after swapping 4 symbols
 -/
 lemma sibling_swapFourSyms_when_4th_is_sibling {α} [DecidableEq α]
-  (t : HuffmanTree α) (a b c d : α)
-  (h_consistent : consistent t) (h_a: a ∈ alphabet t) (h_b : b ∈ alphabet t)
-  (h_c : c ∈ alphabet t) (h_d : d ∈ alphabet t)
+  (t : HuffmanTree α) (a b c : α)
+  (h_consistent : consistent t) (h_a: a ∈ alphabet t)
+  (h_c : c ∈ alphabet t)
   (h_a_b : a ≠ b) (h_sib_c : sibling t c ≠ c) :
   sibling (swapFourSyms t a b c (sibling t c)) a = b := by
   by_cases h : a ≠ sibling t c ∧ b ≠ c
   · let d' := sibling t c
     let ts := swapFourSyms t a b c d'
     have abba : (sibling ts a = b) = (sibling ts b = a) := by
-      grind[sibling_reciprocal, consistent_swapFourSyms]
+      grind only [sibling_reciprocal, !consistent_swapFourSyms]
     have s : sibling t c = sibling (swapSyms t a c) a := by
-      grind[sibling_swapSyms_other_sibling, sibling_reciprocal,
-            swapSyms, swapLeaves_id,consistent_swapFourSyms, consistent, consistent_swapSyms]
+      grind only [!sibling_swapSyms_other_sibling, swapSyms, !consistent_swapSyms,
+        sibling_reciprocal, !swapLeaves_id]
     have h : sibling ts b = a := by
       calc
         sibling ts b = sibling (swapSyms t a c) d' := by
           simp [ts, swapFourSyms, d', h]
           by_cases h_ac : a = c <;>
-          aesop (add norm[swapSyms, freq, sibling, consistent, swapLeaves])
+          simp_all
+          simp_all only [swapSyms, ne_eq, not_false_eq_true, freq_swapLeaves, ↓reduceIte, ts, d']
+          obtain ⟨left, right⟩ := h
+          split
+          next h =>
+            subst h
+            simp_all only [not_false_eq_true, not_true_eq_false]
+          next h =>
+            split
+            next h_1 =>
+              grind only [consistent_swapLeaves, not_false_eq_true, consistent_swapFourSyms, not_true_eq_false]
+            next h_1 =>
+              simp_all only [consistent_swapLeaves, ne_eq, not_false_eq_true,
+                sibling_swapLeaves_sibling]
         _ = a := by aesop
     aesop (add norm [swapLeaves, swapSyms, sibling])
   · simp [swapFourSyms]
     split
     · by_cases h_bc : b = c <;> aesop
-    · aesop (add norm [swapLeaves, swapSyms, sibling])
+    · simp_all only [ne_eq, not_false_eq_true, true_and, Decidable.not_not, ↓reduceIte, swapSyms,
+      sibling_swapLeaves_sibling]

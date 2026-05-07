@@ -13,7 +13,7 @@
 
 import Huffman.HfmnProofs.HfmnTree_prefixfreeness
 import Huffman.HfmnProofs.HfmnTree_uniqueness
-import Huffman.HfmnProofs.HfmnTree_optimum
+import Huffman.HfmnProofs.HfmnTree_optimality_lemmas
 import Mathlib
 
 set_option linter.unusedSectionVars false
@@ -475,7 +475,6 @@ lemma HfmnTree.consistent_toProofTree (huffinput : AlphaNumList α) (t : HfmnTre
           exact False.elim (hdisj' a ha.1 ha.2)
         · intro ha
           simp at ha
-          exact ha
       exact ⟨hdisj_alpha, ihl', ihr'⟩
 
 lemma HfmnTree.depth_toProofTree_eq_depth_of_mem
@@ -493,8 +492,8 @@ lemma HfmnTree.depth_toProofTree_eq_depth_of_mem
       rcases ha with ha_l | ha_r
       · have hchar_l : l.charInTree a = true := (HfmnTree.charInTree_iff l a).2 ha_l
         have ihl' := ihl a hl_nodup ha_l
-        simp [HfmnTree.depth, _root_.depth, HfmnTree.toProofTree,
-          HfmnTree.alphabet_toProofTree, hchar_l, ha_l, ihl', Nat.add_comm]
+        simp [HfmnTree.depth, _root_.depth, HfmnTree.toProofTree, HfmnTree.alphabet_toProofTree,
+          ha_l, ihl', Nat.add_comm]
       · have ha_l_not : a ∉ l.chars := by
           intro ha_l
           exact hdisj' a ha_l ha_r
@@ -502,13 +501,12 @@ lemma HfmnTree.depth_toProofTree_eq_depth_of_mem
           cases hres : l.charInTree a with
           | false =>
               simp at hres
-              exact hres
+              grind
           | true =>
               exact False.elim (ha_l_not ((HfmnTree.charInTree_iff l a).1 (by simpa using hres)))
         have ihr' := ihr a hr_nodup ha_r
-        simp [HfmnTree.depth, _root_.depth, HfmnTree.toProofTree,
-          HfmnTree.alphabet_toProofTree, hchar_l_false, ha_l_not, ha_r,
-          ihr', Nat.add_comm]
+        simp [HfmnTree.depth, _root_.depth, HfmnTree.toProofTree, HfmnTree.alphabet_toProofTree,
+          ha_l_not, ha_r, ihr', Nat.add_comm]
 
 lemma HfmnTree.freq_toProofTree_eq_lookupFreq_of_mem
     (huffinput : AlphaNumList α) (t : HfmnTree α) (a : α)
@@ -517,8 +515,7 @@ lemma HfmnTree.freq_toProofTree_eq_lookupFreq_of_mem
   induction t generalizing a with
   | Leaf b w =>
       simp [HfmnTree.toProofTree, HfmnTree.chars, freq] at ha ⊢
-      subst ha
-      simp [freq]
+      grind
   | Node l r ihl ihr =>
       rcases List.nodup_append'.1 h_nodup with ⟨hl_nodup, hr_nodup, hdisj⟩
       have hdisj' : ∀ x, x ∈ l.chars → x ∈ r.chars → False := by
@@ -640,22 +637,19 @@ lemma HfmnTree.depth_ofProofTree_eq_depth_of_mem
           have hchar : (HfmnTree.ofProofTree t1).charInTree a = true :=
             (HfmnTree.charInTree_ofProofTree_iff t1 a).2 ha1
           have ih1' := ih1 a hc1 ha1
-          simp [HfmnTree.ofProofTree, HfmnTree.depth, _root_.depth,
-            hchar, ha1, ih1', Nat.add_comm]
+          simp [HfmnTree.ofProofTree, _root_.depth, ha1, ih1', Nat.add_comm]
       ·
           rcases hrest with hright | hnone
           · rcases hright with ⟨ha1_not, ha2⟩
             have hchar_false : (HfmnTree.ofProofTree t1).charInTree a = false := by
               cases hres : (HfmnTree.ofProofTree t1).charInTree a with
               | false =>
-                  simp at hres
-                  exact hres
+                  grind
               | true =>
                   exact False.elim (ha1_not ((HfmnTree.charInTree_ofProofTree_iff t1 a).1 (by simpa using hres)))
             have ih2' := ih2 a hc2 ha2
-            simp [HfmnTree.ofProofTree, HfmnTree.depth, _root_.depth,
-              HfmnTree.charInTree_ofProofTree_iff, hchar_false, ha1_not, ha2,
-              ih2', Nat.add_comm]
+            grind [HfmnTree.ofProofTree, HfmnTree.depth, _root_.depth,
+              HfmnTree.charInTree_ofProofTree_iff]
           · rcases hnone with ⟨ha1_not, ha2_not⟩
             simp [alphabet, ha1_not, ha2_not] at ha
 
@@ -669,7 +663,9 @@ lemma HfmnTree.cost_ofProofTree_eq_weightedPathLength
     have hnodup_tree : (HfmnTree.ofProofTree t).chars.Nodup :=
       HfmnTree.nodup_chars_of_ofProofTree t h_cons
     exact List.perm_of_nodup_nodup_toFinset_eq hnodup_tree h_wf
-      (by simp [h_alpha] using HfmnTree.chars_toFinset_ofProofTree t)
+      (by simp_all only [AlphaNumList.symbols, List.mem_toFinset, List.mem_map, Prod.exists,
+        exists_and_right, exists_eq_right, AlphaNumList.lookupFreq, forall_exists_index,
+        chars_toFinset_ofProofTree])
   calc
     cost t = ∑ a ∈ alphabet t, freq t a * _root_.depth t a := by
       exact cost_eq_Sum_freq_mult_depth t h_cons
@@ -703,10 +699,7 @@ lemma HfmnTree.cost_proofTree_eq_weightedPathLength
     intro a ha
     simp [HfmnTree.proofTree, freq_huffman,
       HfmnTree.freqF_proofForest_eq_lookupFreq huffinput h_wf]
-  have hmain :=
-    HfmnTree.cost_ofProofTree_eq_weightedPathLength huffinput h_wf
-      (HfmnTree.proofTree huffinput h_ne) hcons h_alpha h_freq
-  simpa [HfmnTree.tree, h_ne] using hmain
+  grind [HfmnTree.cost_ofProofTree_eq_weightedPathLength, HfmnTree.proofTree, HfmnTree.tree]
 
 theorem HfmnTree.weightedPathLength_optimal
     (huffinput : AlphaNumList α)
@@ -754,12 +747,9 @@ theorem HfmnTree.weightedPathLength_optimal
         AlphaNumList.lookupFreq_eq_zero_of_not_mem_symbols huffinput hnot_input
       have hfreq_u0 : freq u a = 0 := by
         apply notin_alphabet_imp_freq_0
-        simpa [u, HfmnTree.alphabet_toProofTree] using ha
-      have hfreq_hp :
-          freq hp a = AlphaNumList.lookupFreq huffinput a := by
-        simp [hp, HfmnTree.proofTree, freq_huffman,
-          HfmnTree.freqF_proofForest_eq_lookupFreq huffinput h_wf]
-      rw [hfreq_hp, hlookup0, hfreq_u0]
+        simpa [u, ] using ha
+      grind [HfmnTree.proofTree, freq_huffman, HfmnTree.alphabet_toProofTree,
+        HfmnTree.freqF_proofForest_eq_lookupFreq huffinput h_wf]
   have hcost_le : cost hp ≤ cost u := hopt u hcons_u halpha hfreq_eq
   have hcost_hp :
       cost hp = weightedPathLength (HfmnTree.tree huffinput) huffinput :=
@@ -767,10 +757,7 @@ theorem HfmnTree.weightedPathLength_optimal
   have hcost_u :
       cost u = weightedPathLength t huffinput :=
     HfmnTree.cost_toProofTree_eq_weightedPathLength huffinput h_wf t h_adm
-  calc
-    weightedPathLength (HfmnTree.tree huffinput) huffinput = cost hp := hcost_hp.symm
-    _ ≤ cost u := hcost_le
-    _ = weightedPathLength t huffinput := hcost_u
+  grind
 
 theorem Huffman.leastEncodedData_optimal
     (huffinput : AlphaNumList α)

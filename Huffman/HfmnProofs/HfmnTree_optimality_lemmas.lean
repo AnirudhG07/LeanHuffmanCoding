@@ -113,7 +113,7 @@ lemma optimum_splitLeaf {α : Type} [DecidableEq α]
       have ha_u' : a ∈ alphabet u' := by simp [h_alp_u'_u, ha_u]
       rw [freq_mergesibling u' a h_consistent_u' ha_u' ?_]
       · aesop (add norm [h_freq_u', h_freq_u.symm])
-      · simpa [h_sib_a]
+      · grind
     calc
       cost t' = cost t + wa + wb :=
         cost_splitLeaf t wa wb a b h_consistent ha_t h_freq

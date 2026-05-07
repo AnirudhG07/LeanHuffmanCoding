@@ -272,4 +272,4 @@ def HfmnTree.codesUnique (t : HfmnTree α) : Prop :=
 @[simp]
 theorem HfmnTree.codesUnique_holds (t : HfmnTree α) :
     HfmnTree.codesUnique t := by
-  simpa [HfmnTree.codesUnique] using HfmnTree.all_codes_unique t []
+  grind [HfmnTree.codesUnique, HfmnTree.all_codes_unique]
