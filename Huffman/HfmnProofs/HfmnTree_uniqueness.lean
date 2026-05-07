@@ -264,3 +264,12 @@ theorem HfmnTree.all_codes_unique (t : HfmnTree α) (c : BoolList) :
     case right =>
       grind
 termination_by (t.vertices c).length
+
+/-- All vertex codes of a tree are pairwise distinct. -/
+def HfmnTree.codesUnique (t : HfmnTree α) : Prop :=
+  (t.vertices []).Pairwise (fun v₁ v₂ => v₁.code ≠ v₂.code)
+
+@[simp]
+theorem HfmnTree.codesUnique_holds (t : HfmnTree α) :
+    HfmnTree.codesUnique t := by
+  simpa [HfmnTree.codesUnique] using HfmnTree.all_codes_unique t []

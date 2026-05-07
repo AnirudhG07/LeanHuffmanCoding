@@ -10,6 +10,7 @@ Some of the properties of Huffman trees are:
 
 We implements the Huffman tree construction algorithm, and prove its correctness.
 -/
+import Huffman.HfmnProofs.HfmnTree_basic
 import Mathlib
 set_option linter.unusedSectionVars false
 
@@ -106,6 +107,196 @@ variable {α : Type} [DecidableEq α] [Inhabited α] [Ord α] [HfmnType α]
 instance [Inhabited α] [DecidableEq α] : HfmnType α where
   default := default
 
+/-!
+# Proof-side Huffman construction
+
+The public `HfmnTree` API is backed by the proof-side `HuffmanTree` algorithm
+defined here, so construction lives with the library-facing tree module rather
+than in a separate proof-only file.
+-/
+
+/--
+Condition stating that a forest `ts` is sorted by weight.
+-/
+def sortedByWeight {α} : Forest α → Prop
+  | [] => true
+  | [_] => true
+  | t1 :: t2 :: ts => weight t1 ≤ weight t2 ∧ sortedByWeight (t2 :: ts)
+
+/--
+If a forest `(t :: ts)` is sorted by weight, then its tail is also sorted by weight.
+-/
+@[simp]
+lemma sortedByWeight_Cons_imp_sortedByWeight {α}
+  (t : HuffmanTree α) (ts : Forest α) :
+  sortedByWeight (t :: ts) → sortedByWeight ts := by
+  cases ts <;> simp [sortedByWeight]
+
+/--
+If a forest `(t :: ts)` is sorted by weight, then every tree
+in the tail has weight greater than or equal to the weight of `t`.
+`t` has minimal weight among all trees in the forest.
+-/
+@[simp]
+lemma sortedByWeight_Cons_imp_forall_weight_ge {α}
+  (t : HuffmanTree α) (ts : Forest α) :
+  sortedByWeight (t :: ts) → ∀ u ∈ ts, weight u ≥ weight t := by
+  induction ts generalizing t <;> grind [sortedByWeight]
+
+/--
+The weight that is stored in the node.
+-/
+def cachedWeight {α} : HuffmanTree α → Nat
+  | HuffmanTree.leaf w _ => w
+  | HuffmanTree.node w _ _ => w
+
+/--
+For trees of height zero, the cached weight is the actual weight.
+-/
+@[simp]
+lemma height_0_imp_cachedWeight_eq_weight {α} (t : HuffmanTree α) :
+  height t = 0 → cachedWeight t = weight t := by
+  aesop (add norm [weight, cachedWeight, height])
+
+/--
+Combine two Huffman trees into a single tree.
+
+The final tree has as children the input trees and sum of their weights as its weight.
+-/
+def uniteTrees {α} (t1 t2 : HuffmanTree α) : HuffmanTree α :=
+  HuffmanTree.node (cachedWeight t1 + cachedWeight t2) t1 t2
+
+/--
+The alphabet of a united tree is the union of the alphabets of its input trees.
+-/
+@[simp]
+lemma alphabet_uniteTrees {α : Type} [DecidableEq α] (t1 t2 : HuffmanTree α) :
+  alphabet (uniteTrees t1 t2) = alphabet t1 ∪ alphabet t2 := by
+  simp [uniteTrees, alphabet]
+
+/--
+Uniting two consistent trees with disjoint alphabets creates a consistent tree.
+-/
+@[simp]
+lemma consistent_uniteTrees {α : Type} [DecidableEq α] (t1 t2 : HuffmanTree α)
+  (h_consistent_t1 : consistent t1) (h_consisstent_t2 : consistent t2)
+  (h_disj : alphabet t1 ∩ alphabet t2 = ∅) :
+  consistent (uniteTrees t1 t2) := by
+  simp_all [uniteTrees, consistent]
+
+@[simp]
+lemma freq_uniteTrees {α : Type} [DecidableEq α] (t1 t2 : HuffmanTree α) (a : α) :
+  freq (uniteTrees t1 t2) a = freq t1 a + freq t2 a := by
+  simp [uniteTrees, freq]
+
+/--
+Insert a Huffman tree into a forest, preserving the ordering by weight.
+-/
+def insortTree {α} (u : HuffmanTree α) : List (HuffmanTree α) → List (HuffmanTree α)
+  | [] => [u]
+  | t :: ts =>
+      if cachedWeight u ≤ cachedWeight t then
+        u :: t :: ts
+      else
+        t :: insortTree u ts
+
+/--
+Inserting a tree into a list `ts` using `insortTree`
+increases the length of the list by one.
+-/
+@[simp]
+lemma insortTree_length {α} (u : HuffmanTree α) (ts : List (HuffmanTree α)) :
+    (insortTree u ts).length = ts.length + 1 := by
+  induction ts <;> aesop (add norm [insortTree])
+
+/--
+Inserting a tree into any list `ts` using `insortTree`
+produces a non-empty list.
+-/
+@[simp]
+lemma insortTree_ne_nil {α} (u : HuffmanTree α) (ts : List (HuffmanTree α)) :
+    insortTree u ts ≠ [] := by
+  grind [insortTree, insortTree_length]
+
+/--
+Inserting a tree into a forest joins its alphabet to the forest alphabet.
+-/
+@[simp]
+lemma alphabetF_insortTree {α : Type} [DecidableEq α] (u : HuffmanTree α) (ts : Forest α) :
+  alphabetF (insortTree u ts) = alphabet u ∪ alphabetF ts := by
+  induction ts <;> aesop (add norm [insortTree, alphabetF, alphabet])
+
+@[simp]
+lemma consistentF_insortTree {α : Type} [DecidableEq α] (u : HuffmanTree α) (ts : Forest α) :
+  consistentF (insortTree u ts) = consistentF (u :: ts) := by
+  induction ts <;> grind [consistentF, alphabetF_insortTree, alphabetF, insortTree]
+
+@[simp]
+lemma freqF_insortTree {α : Type} [DecidableEq α] (u : HuffmanTree α) (ts : Forest α) :
+  freqF (insortTree u ts) = fun a => freq u a + freqF ts a := by
+  ext a
+  induction ts <;> aesop (add norm [insortTree, freq, freqF, add_left_comm])
+
+@[simp]
+lemma heightF_insortTree {α : Type} (u : HuffmanTree α) (ts : Forest α) :
+  heightF (insortTree u ts) = max (height u) (heightF ts) := by
+  induction ts <;> aesop (add norm [heightF, max_left_comm, height, insortTree])
+
+/--
+Inserting a tree into a forest that is sorted by weight preserves sorting.
+-/
+@[simp]
+lemma sortedByWeight_insortTree {α}
+  (t : HuffmanTree α) (ts : Forest α)
+  (h_sbw : sortedByWeight ts) (h_height_t : height t = 0) (h_height_ts : heightF ts = 0) :
+  sortedByWeight (insortTree t ts) := by
+  induction ts using sortedByWeight.induct <;>
+    grind [heightF, insortTree, height_0_imp_cachedWeight_eq_weight, sortedByWeight]
+
+/--
+Construct a Huffman tree from a non-empty forest.
+
+At each step, two trees are combined and inserted into the forest until only a tree is left.
+-/
+def huffman {α} (xs : Forest α) (h : xs ≠ []) : HuffmanTree α :=
+  match xs with
+  | [t] => t
+  | t1 :: t2 :: ts =>
+      huffman (insortTree (uniteTrees t1 t2) ts) (insortTree_ne_nil _ _)
+termination_by xs.length
+
+/--
+The alphabet of the Huffman tree constructed from a forest is exactly the alphabet of the forest.
+-/
+@[simp]
+lemma alphabet_huffman {α} [DecidableEq α] (ts : Forest α) (h : ts ≠ []) :
+  alphabet (huffman ts h) = alphabetF ts := by
+  induction ts, h using huffman.induct with
+  | case1 t h1 h2 =>
+      simp [alphabetF, huffman]
+      exact Finset.inter_eq_left.mp rfl
+  | case2 t1 t2 ts h1 h2 ih =>
+      simp [huffman, alphabetF, ih, Finset.union_left_comm, Finset.union_comm]
+
+/--
+If the input forest is consistent, then the Huffman tree constructed is also consistent.
+-/
+@[simp]
+lemma consistent_huffman {α} [DecidableEq α] (ts : Forest α) (h : ts ≠ []) :
+  consistentF ts → consistent (huffman ts h) := by
+  induction ts, h using huffman.induct <;>
+    simp [consistentF, huffman, alphabetF, Finset.inter_union_distrib_left] at *
+  grind [consistent_uniteTrees, consistent, huffman, consistentF]
+
+/--
+The frequency of a symbol in the Huffman tree constructed is its total frequency in the forest.
+-/
+@[simp]
+lemma freq_huffman {α} [DecidableEq α] (ts : Forest α) (a : α) (h : ts ≠ []) :
+  freq (huffman ts h) a = freqF ts a := by
+  induction ts, h using huffman.induct <;>
+    grind [freq, freqF, huffman, uniteTrees, freqF_insortTree]
+
 def eg₁ : AlphaNumList Char := [('a', 45),('b', 13),('c', 12),('d', 16),('e', 9),('f', 5)]
 
 /-Converts a String input to a Boolean List -/
@@ -130,217 +321,7 @@ def HfmnTree.weight : HfmnTree α → Nat
   | Leaf _ w => w
   | Node l r => l.weight + r.weight
 
-/-
-Comparison function for Huffman trees weights
--/
-@[simp, grind .]
-def HfmnTree.compare (s s' : HfmnTree α) : Ordering :=
-  Ord.compare s.weight s'.weight
-
-instance : Ord (HfmnTree α) where
-  compare := HfmnTree.compare
-
-/-
-The orderedInsert function inserts an element into a sorted list while maintaining the order.
--/
-@[simp, grind .]
-def orderedInsert (a : α) : List α → List α
-  | [] => [a]
-  | b :: l =>
-    match compare a b with
-    | .lt => a :: b :: l
-    | _ => b :: orderedInsert a l
-
-/- * Theorem: The orderedInsert function maintains the order of the list. -/
-theorem orderedInsert_nonempty {α : Type} [Ord α] (a : α) (l : List α) :
-  (orderedInsert a l).length > 0 := by
-  induction l with
-  | nil => simp [orderedInsert]
-  | cons b t ih =>
-    simp [orderedInsert]
-    grind
-
-/- * Theorem: The length of the list after inserting an element is equal to the original length plus one.-/
-theorem orderedInsert_inc_length {α : Type} [Ord α] (a : α) (l : List α) :
-  (orderedInsert a l).length = l.length + 1 := by
-  induction l with
-  | nil => simp [orderedInsert]
-  | cons h t ih =>
-    simp [orderedInsert]
-    grind
-
-/- Insertion sort function that sorts a list of elements so that the elements are in non-decreasing order.-/
-@[simp, grind .]
-def insertionSort : List α → List α
-  | [] => []
-  | b :: l => orderedInsert b (insertionSort l)
-
-@[simp]
-lemma mem_orderedInsert {α : Type} [Ord α] (x a : α) (l : List α) :
-    x ∈ orderedInsert a l ↔ x = a ∨ x ∈ l := by
-  induction l with
-  | nil =>
-    simp [orderedInsert]
-  | cons b t ih =>
-    by_cases hcmp : compare a b = .lt
-    · simp [orderedInsert, hcmp]
-    · simp [orderedInsert]
-      grind
-
-@[simp]
-lemma mem_insertionSort {α : Type} [Ord α] (x : α) (l : List α) :
-    x ∈ insertionSort l ↔ x ∈ l := by
-  induction l with
-  | nil =>
-    simp [insertionSort]
-  | cons b t ih =>
-    simp [insertionSort, mem_orderedInsert, ih]
-
--- #check insertionSort
-
-/- * Theorem: The insertionSort function preserves the length of the list. -/
-theorem insertionSort_preserves_length {α : Type} [Ord α] :
-  ∀ l : List α, (insertionSort l).length = l.length := by
-  intro l
-  induction l with
-  | nil => simp [insertionSort]
-  | cons b l ih =>
-    simp [insertionSort]
-    have h := orderedInsert_inc_length b (insertionSort l)
-    grind
-
-@[grind .]
-lemma orderedInsert_sorted_weight (a : HfmnTree α) (l : List (HfmnTree α))
-    (h : l.Pairwise (fun t₁ t₂ => t₁.weight ≤ t₂.weight)) :
-    (orderedInsert a l).Pairwise (fun t₁ t₂ => t₁.weight ≤ t₂.weight) := by
-  induction l with
-  | nil =>
-    simp [orderedInsert]
-  | cons b t ih =>
-    rcases List.pairwise_cons.1 h with ⟨hb, ht⟩
-    by_cases hlt : compare a b = .lt
-    · have hab : a.weight ≤ b.weight := by
-        have hcmpw : compare a.weight b.weight = Ordering.lt := by
-          simpa [HfmnTree.compare] using hlt
-        grind
-      rw [orderedInsert, hlt]
-      exact List.pairwise_cons.2 ⟨by grind, List.pairwise_cons.2 ⟨hb, ht⟩⟩
-    · have hba : b.weight ≤ a.weight := by
-        have hnotlt : ¬ a.weight < b.weight := by
-          intro hltw
-          apply hlt
-          have hcmpw : compare a.weight b.weight = Ordering.lt :=
-            Nat.compare_eq_lt.mpr hltw
-          simpa [HfmnTree.compare] using hcmpw
-        exact Nat.le_of_not_gt hnotlt
-      have hbins : ∀ x ∈ orderedInsert a t, b.weight ≤ x.weight := by
-        intro x hx
-        rcases (mem_orderedInsert x a t).1 hx with rfl | hxin
-        · exact hba
-        · exact hb x hxin
-      have hrec : (orderedInsert a t).Pairwise (fun t₁ t₂ => t₁.weight ≤ t₂.weight) := ih ht
-      simpa [orderedInsert, hlt] using (List.pairwise_cons.2 ⟨hbins, hrec⟩)
-
-lemma insertionSort_sorted (trees : List (HfmnTree α)) :
-    (insertionSort trees).Pairwise (fun t₁ t₂ => t₁.weight ≤ t₂.weight) := by
-  induction trees with
-  | nil =>
-    simp [insertionSort]
-  | cons t ts ih =>
-    simpa [insertionSort] using orderedInsert_sorted_weight t (insertionSort ts) ih
-
-/- * Lemma: The insertionSorted non-empty list is non-empty -/
-@[simp, grind .]
-lemma sorted_nonempty_is_nonempty (trees : List (HfmnTree α)) (h : trees ≠ []) :
-  insertionSort trees ≠ [] := by
-  have h₁ : (insertionSort trees).length = trees.length := by
-    apply insertionSort_preserves_length
-  grind
-
-
 def String.freq(s : String) (c : Char) := s.toList.filter (· == c) |>.length
--- #eval "hello".freq 'l' --2
-
-/-
-If t1 t2 is either Leaf or Node, when merged, it will be a Node.
--/
-@[simp, grind .]
-def HfmnTree.mergeTrees (t1 t2 : HfmnTree α) : HfmnTree α :=
-  .Node t1 t2
-
-/-
-In our algorithm, we take the mininum two trees and merge them. The merged tree is then inserted back into the list of trees.
--/
-@[simp, grind .]
-def HfmnTree.merge (trees : List (HfmnTree α)) (h : trees ≠ []) : HfmnTree α :=
-  let sorted := insertionSort trees
-  have hp : sorted ≠ [] := by
-    apply sorted_nonempty_is_nonempty
-    exact h
-
-  match p:sorted with
-  | [] => by simp at hp
-  | [t] => t
-  | t1 :: t2 :: rest =>
-    let newTree := .mergeTrees t1 t2
-    have : rest.length + 1 < trees.length := by
-      have h₁ : sorted.length = trees.length := by apply insertionSort_preserves_length
-      grind
-    HfmnTree.merge (newTree :: rest) (by simp)
-termination_by trees.length
-
-def eg : BoolList := [true, false, true, false]
-
-/-
-The Alphabet structure is used to represent the values and their frequencies in the input data. It contains a value of type α and a frequency of type Nat.
--/
-structure Alphabet (α : Type) where
-  val : α
-  freq : Nat
-deriving Inhabited, Repr
-
-abbrev AlphaNumTree (α : Type) := List (Alphabet α)
-
-def convert_input_to_alphabet (input : AlphaNumList α) : AlphaNumTree α := input.map fun a => Alphabet.mk a.1 a.2
-
-/-
-* Lemma: The conversion function `convert_input_to_alphabet` for a non-empty list is non-empty.
--/
-lemma cita_ne_to_ne (s : AlphaNumList α) (h : s ≠ []) :
-  convert_input_to_alphabet s ≠ [] := by
-  intro hi
-  have h₁ : (convert_input_to_alphabet s).length = s.length := by
-    apply List.length_map
-  grind
-
-/-
-The main Tree creator function which takes the input and returns the Huffman tree, with the encoded BoolList included.
--/
-@[simp, grind .]
-def HfmnTree.tree (huffinput : AlphaNumList α) : HfmnTree α :=
-  if p:huffinput.isEmpty then -- Handle []
-    HfmnTree.Leaf HfmnType.default 0
-  else
-    have huffinput_nonempty : huffinput ≠ [] := by intro h₁; rw [h₁] at p; simp at p
-
-    let input := convert_input_to_alphabet huffinput
-    have hi : input ≠ [] := by
-      apply cita_ne_to_ne
-      assumption
-
-    let leaves : List (HfmnTree α) := input.map (fun a => HfmnTree.Leaf a.val a.freq)
-    have hl : leaves ≠ [] := by
-      intro h
-      have h₁ : (leaves).length = (input).length := by
-        apply List.length_map
-      grind
-    let sorted := insertionSort leaves
-    have sorted_nonempty : sorted ≠ [] := by grind
-
-    let sorted_tree := HfmnTree.merge sorted (by simp [sorted_nonempty] )
-    sorted_tree
-
--- #eval HfmnTree.tree eg₁
 
 /- Returns the set of values in the tree. -/
 @[simp, grind .]
@@ -368,93 +349,144 @@ def HfmnTree.encode (c: α) (t : HfmnTree α) : BoolList :=
       true :: encode c r
 
 @[simp, grind .]
-lemma HfmnTree.mergeTrees_charInTree {t₁ t₂ : HfmnTree α} {c : α} :
-    (HfmnTree.mergeTrees t₁ t₂).charInTree c =
-    (t₁.charInTree c || t₂.charInTree c) := by
-  grind
-
-@[simp, grind .]
 lemma HfmnTree.charInTree_leaf (a c : α) (f : Nat) :
     (HfmnTree.Leaf a f).charInTree c = (a == c) := by
   grind
 
-lemma HfmnTree.merge_contains_char_aux
-    (c : α) :
-    ∀ n : Nat, ∀ trees : List (HfmnTree α), trees.length = n → ∀ h : trees ≠ [],
-      (∃ t ∈ trees, t.charInTree c = true) →
-      (HfmnTree.merge trees h).charInTree c = true := by
-  intro n
-  induction n using Nat.strong_induction_on with
-  | h n ih =>
-    intro trees hlen hne hex
-    classical
-    unfold HfmnTree.merge
-    let sorted := insertionSort trees
-    have hp : sorted ≠ [] := by
-      apply sorted_nonempty_is_nonempty
-      exact hne
-    have hsorted_mem : ∃ t ∈ sorted, t.charInTree c = true := by
-      rcases hex with ⟨t, ht, htc⟩
-      refine ⟨t, ?_, htc⟩
-      have : t ∈ insertionSort trees := (mem_insertionSort t trees).2 ht
-      simpa [sorted] using this
+/- Convert the canonical proof-side Huffman tree into the public runtime tree. -/
+@[simp]
+def HfmnTree.ofProofTree : HuffmanTree α → HfmnTree α
+  | .leaf w a => .Leaf a w
+  | .node _ t1 t2 => .Node (HfmnTree.ofProofTree t1) (HfmnTree.ofProofTree t2)
 
-    cases hs : sorted with
-    | nil =>
-      cases hp hs
-    | cons t₁ rest =>
-      cases rest with
-      | nil =>
-        rcases hsorted_mem with ⟨t, ht, htchar⟩
-        have ht_eq : t = t₁ := by simpa [hs] using ht
-        subst ht_eq
-        grind
-      | cons t₂ rest' =>
-        have hnext : ∃ t ∈ (HfmnTree.mergeTrees t₁ t₂ :: rest'), t.charInTree c = true := by
-          rcases hsorted_mem with ⟨t, ht, htchar⟩
-          have ht_cases : t = t₁ ∨ t = t₂ ∨ t ∈ rest' := by
-            simpa [hs] using ht
-          rcases ht_cases with rfl | rfl | ht_rest
-          · simp; grind
-          · simp; grind
-          · exact ⟨t, by simp [ht_rest], htchar⟩
+@[simp]
+lemma HfmnTree.weight_ofProofTree (t : HuffmanTree α) :
+    (HfmnTree.ofProofTree t).weight = _root_.weight t := by
+  induction t <;> simp [HfmnTree.ofProofTree, HfmnTree.weight, _root_.weight, *]
 
-        have hlt : (HfmnTree.mergeTrees t₁ t₂ :: rest').length < n := by
-          have h_sorted_len : sorted.length = trees.length := by
-            have h' : (insertionSort trees).length = trees.length := by
-              apply insertionSort_preserves_length
-            simpa [sorted] using h'
-          grind
-        grind
+@[simp]
+lemma HfmnTree.mem_chars_ofProofTree (t : HuffmanTree α) (a : α) :
+    a ∈ (HfmnTree.ofProofTree t).chars ↔ a ∈ alphabet t := by
+  induction t with
+  | leaf w b =>
+      simp [HfmnTree.ofProofTree, HfmnTree.chars, alphabet]
+  | node w t1 t2 ih1 ih2 =>
+      simp [HfmnTree.ofProofTree, HfmnTree.chars, alphabet, ih1, ih2]
 
-lemma HfmnTree.merge_contains_char
-    (c : α) (trees : List (HfmnTree α)) (h : trees ≠ [])
-    (hex : ∃ t ∈ trees, t.charInTree c = true) :
-    (HfmnTree.merge trees h).charInTree c = true := by
-  exact HfmnTree.merge_contains_char_aux c trees.length trees rfl h hex
+@[simp]
+lemma HfmnTree.charInTree_ofProofTree_iff (t : HuffmanTree α) (a : α) :
+    (HfmnTree.ofProofTree t).charInTree a = true ↔ a ∈ alphabet t := by
+  rw [HfmnTree.charInTree_iff, HfmnTree.mem_chars_ofProofTree]
+
+/- A single proof-side leaf corresponding to one `(symbol, frequency)` entry. -/
+@[simp]
+def HfmnTree.proofLeaf (x : α × Nat) : HuffmanTree α :=
+  HuffmanTree.leaf x.2 x.1
+
+/- Sorted proof-side forest built from the public input format. -/
+@[simp]
+def HfmnTree.proofForest : AlphaNumList α → Forest α
+  | [] => []
+  | x :: xs => insortTree (HfmnTree.proofLeaf x) (HfmnTree.proofForest xs)
+
+@[simp]
+lemma HfmnTree.alphabetF_proofForest (input : AlphaNumList α) :
+    alphabetF (HfmnTree.proofForest input) = input.symbols.toFinset := by
+  induction input with
+  | nil =>
+      rfl
+  | cons x xs ih =>
+      simp [HfmnTree.proofForest, AlphaNumList.symbols, ih,
+        alphabetF_insortTree, HfmnTree.proofLeaf, alphabet]
+
+@[simp]
+lemma HfmnTree.heightF_proofForest (input : AlphaNumList α) :
+    heightF (HfmnTree.proofForest input) = 0 := by
+  induction input with
+  | nil =>
+      simp [HfmnTree.proofForest, heightF]
+  | cons x xs ih =>
+      simp [HfmnTree.proofForest, ih, heightF_insortTree,
+        HfmnTree.proofLeaf, height]
+
+@[simp]
+lemma HfmnTree.sortedByWeight_proofForest (input : AlphaNumList α) :
+    sortedByWeight (HfmnTree.proofForest input) := by
+  induction input with
+  | nil =>
+      simp [HfmnTree.proofForest, sortedByWeight]
+  | cons x xs ih =>
+      have hsorted :=
+        sortedByWeight_insortTree
+          (t := HfmnTree.proofLeaf x)
+          (ts := HfmnTree.proofForest xs)
+          ih
+          (by simp [HfmnTree.proofLeaf, height])
+          (HfmnTree.heightF_proofForest (α := α) xs)
+      simpa [HfmnTree.proofForest, HfmnTree.proofLeaf] using hsorted
+
+lemma HfmnTree.proofForest_ne_nil {input : AlphaNumList α} (h : input ≠ []) :
+    HfmnTree.proofForest input ≠ [] := by
+  cases input with
+  | nil =>
+      contradiction
+  | cons x xs =>
+      simp [HfmnTree.proofForest]
+
+/- Canonical proof-side Huffman tree for a non-empty public input. -/
+@[simp]
+def HfmnTree.proofTree (huffinput : AlphaNumList α) (h : huffinput ≠ []) : HuffmanTree α :=
+  huffman (HfmnTree.proofForest huffinput) (HfmnTree.proofForest_ne_nil h)
+
+/- Convert a public runtime tree back into the proof-side model, using input frequencies. -/
+@[simp]
+def HfmnTree.toProofTree (huffinput : AlphaNumList α) : HfmnTree α → HuffmanTree α
+  | .Leaf a _ => HuffmanTree.leaf (AlphaNumList.lookupFreq huffinput a) a
+  | .Node l r => HuffmanTree.node 0 (HfmnTree.toProofTree huffinput l) (HfmnTree.toProofTree huffinput r)
+
+@[simp]
+lemma HfmnTree.alphabet_toProofTree (huffinput : AlphaNumList α) (t : HfmnTree α) :
+    alphabet (HfmnTree.toProofTree huffinput t) = t.chars.toFinset := by
+  induction t with
+  | Leaf a w =>
+      simp [HfmnTree.toProofTree, HfmnTree.chars, alphabet]
+  | Node l r ihl ihr =>
+      simp [HfmnTree.toProofTree, HfmnTree.chars, alphabet, ihl, ihr]
+
+/- Public constructor: canonical proof-side Huffman algorithm, re-exposed as `HfmnTree`. -/
+@[simp]
+def HfmnTree.tree (huffinput : AlphaNumList α) : HfmnTree α :=
+  if h : huffinput = [] then
+    HfmnTree.Leaf HfmnType.default 0
+  else
+    HfmnTree.ofProofTree (HfmnTree.proofTree huffinput h)
 
 @[simp, grind .]
 lemma HfmnTree.tree_contains_input_chars (huffinput : AlphaNumList α)
     (a : α) (freq : Nat) (h : (a, freq) ∈ huffinput) :
     (HfmnTree.tree huffinput).charInTree a = true := by
-  by_cases hp : huffinput.isEmpty
-  · have : huffinput = [] := by simpa [List.isEmpty_iff] using hp
-    grind
-  · rw [HfmnTree.tree, dif_neg hp]
-    let input := convert_input_to_alphabet huffinput
-    let leaves : List (HfmnTree α) := input.map (fun x => HfmnTree.Leaf x.val x.freq)
-    have hmem_input : Alphabet.mk a freq ∈ input := by
-      unfold input convert_input_to_alphabet
-      exact List.mem_map.mpr ⟨(a, freq), h, by simp⟩
-    have hleaf : HfmnTree.Leaf a freq ∈ leaves := by
-      unfold leaves
-      exact List.mem_map.mpr ⟨Alphabet.mk a freq, hmem_input, by simp⟩
-    have hsorted_mem : HfmnTree.Leaf a freq ∈ insertionSort leaves := by
-      exact (mem_insertionSort (HfmnTree.Leaf a freq) leaves).2 hleaf
-    have hsorted_nonempty : insertionSort leaves ≠ [] := by
-      grind
-    exact HfmnTree.merge_contains_char a (insertionSort leaves) hsorted_nonempty
-      ⟨HfmnTree.Leaf a freq, hsorted_mem, by simp⟩
+  have hne : huffinput ≠ [] := by
+    intro hnil
+    simp [hnil] at h
+  have hsym : a ∈ AlphaNumList.symbols huffinput :=
+    (AlphaNumList.mem_symbols_iff).2 ⟨freq, h⟩
+  have halphabetF : a ∈ alphabetF (HfmnTree.proofForest huffinput) := by
+    rw [HfmnTree.alphabetF_proofForest]
+    simpa using hsym
+  have halphabet :
+      a ∈ alphabet
+        (huffman (HfmnTree.proofForest huffinput)
+          (HfmnTree.proofForest_ne_nil hne)) := by
+    simpa [alphabet_huffman (HfmnTree.proofForest huffinput)
+      (HfmnTree.proofForest_ne_nil hne)] using halphabetF
+  have hchar :
+      (HfmnTree.ofProofTree
+        (huffman (HfmnTree.proofForest huffinput)
+          (HfmnTree.proofForest_ne_nil hne))).charInTree a = true :=
+    (HfmnTree.charInTree_ofProofTree_iff
+      (huffman (HfmnTree.proofForest huffinput)
+        (HfmnTree.proofForest_ne_nil hne)) a).2 halphabet
+  simpa [HfmnTree.tree, hne] using hchar
 
 -- #eval HfmnTree.encode 'a' (HfmnTree.tree eg₁) -- [false]
 
@@ -504,7 +536,7 @@ Admissibility aligned to Huffman's tree output.
 This is the notion used by the optimality bridge theorem.
 -/
 def AdmissibleToHuffman (input : AlphaNumList α) (t : HfmnTree α) : Prop :=
-  t.chars = (HfmnTree.tree input).chars
+  t.chars.Perm (HfmnTree.tree input).chars
 
 -- #eval HfmnTree.decode "1" ( HfmnTree.encoded_tree eg₁ ).1 -- none
 -- #eval HfmnTree.decode "0" ( HfmnTree.encoded_tree eg₁ ).1 -- some 'a'

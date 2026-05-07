@@ -1,4 +1,4 @@
-import Huffman.HfmnProofs.HfmnInductiveBasicLemmas
+import Mathlib.Tactic
 import Aesop
 
 /-!
@@ -28,6 +28,16 @@ Lemmas about main definitions describing its properties and relationships is als
 - `optimum t`        : Condition stating that tree `t` is optimal.
 - `minima t a b`     : Condition stating that two symbols have the lowest frequencies in tree `t`.
 -/
+
+/--
+If `A` and `B` are disjoint (their intersection is empty),
+no element can belong to both sets at the same time.
+-/
+lemma mem_inter_empty {α} [DecidableEq α]
+  (A B : Finset α) (a : α) (h : A ∩ B = ∅)
+  (h1 : a ∈ A) (h2 : a ∈ B) : False := by
+  have : a ∈ A ∩ B := Finset.mem_inter_of_mem h1 h2
+  simp [h] at this
 
 /--
 A Huffman tree over an alphabet `α`.
