@@ -17,4 +17,4 @@ name = "Huffman"
 [[require]]
 name = "mathlib"
 scope = "leanprover-community"
-rev = "v4.30.0-rc1"
+rev = "v4.29.0"
