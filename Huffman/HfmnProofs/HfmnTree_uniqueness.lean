@@ -1,4 +1,4 @@
-import Huffman.HuffmanTree
+import Huffman.HfmnTree_Compression
 set_option linter.unusedSectionVars false
 
 variable {α : Type} [DecidableEq α] [Inhabited α] [Ord α] [HfmnType α]

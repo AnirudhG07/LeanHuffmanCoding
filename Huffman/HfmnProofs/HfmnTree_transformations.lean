@@ -1,4 +1,4 @@
-import Huffman.HuffmanTree
+import Huffman.HfmnTree_Compression
 
 /-!
 # Structural Huffman Tree Operations

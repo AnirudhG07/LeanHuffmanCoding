@@ -1,4 +1,4 @@
-import Huffman.HuffmanTree
+import Huffman.HfmnTree_Compression
 import Mathlib
 
 set_option linter.unusedSectionVars false

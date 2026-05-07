@@ -10,7 +10,7 @@ Some of the properties of Huffman trees are:
 
 We implements the Huffman tree construction algorithm, and prove its correctness.
 -/
-import Huffman.HfmnProofs.HfmnTree_basic
+import Huffman.HfmnTree_Construction
 import Mathlib
 set_option linter.unusedSectionVars false
 
