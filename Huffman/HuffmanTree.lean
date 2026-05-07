@@ -439,8 +439,7 @@ lemma HfmnTree.tree_contains_input_chars (huffinput : AlphaNumList α)
     (HfmnTree.tree huffinput).charInTree a = true := by
   by_cases hp : huffinput.isEmpty
   · have : huffinput = [] := by simpa [List.isEmpty_iff] using hp
-    subst this
-    simp at h
+    grind
   · rw [HfmnTree.tree, dif_neg hp]
     let input := convert_input_to_alphabet huffinput
     let leaves : List (HfmnTree α) := input.map (fun x => HfmnTree.Leaf x.val x.freq)
@@ -453,9 +452,7 @@ lemma HfmnTree.tree_contains_input_chars (huffinput : AlphaNumList α)
     have hsorted_mem : HfmnTree.Leaf a freq ∈ insertionSort leaves := by
       exact (mem_insertionSort (HfmnTree.Leaf a freq) leaves).2 hleaf
     have hsorted_nonempty : insertionSort leaves ≠ [] := by
-      intro hs
-      rw [hs] at hsorted_mem
-      simp at hsorted_mem
+      grind
     exact HfmnTree.merge_contains_char a (insertionSort leaves) hsorted_nonempty
       ⟨HfmnTree.Leaf a freq, hsorted_mem, by simp⟩
 
@@ -501,6 +498,13 @@ def HfmnTree.decode (enc_boolinput : BoolList) (enc_huffinput : List (α × Bool
 /-- A tree is admissible for an input if it encodes exactly the same symbol list. -/
 def AdmissibleToInput (input : AlphaNumList α) (t : HfmnTree α) : Prop :=
   t.chars.Perm (AlphaNumList.symbols input)
+
+/--
+Admissibility aligned to Huffman's tree output.
+This is the notion used by the optimality bridge theorem.
+-/
+def AdmissibleToHuffman (input : AlphaNumList α) (t : HfmnTree α) : Prop :=
+  t.chars = (HfmnTree.tree input).chars
 
 -- #eval HfmnTree.decode "1" ( HfmnTree.encoded_tree eg₁ ).1 -- none
 -- #eval HfmnTree.decode "0" ( HfmnTree.encoded_tree eg₁ ).1 -- some 'a'

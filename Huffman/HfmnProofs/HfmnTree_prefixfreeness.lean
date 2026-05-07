@@ -1,4 +1,4 @@
-import Huffman.HfmnTree_uniqueness
+import Huffman.HfmnProofs.HfmnTree_uniqueness
 
 variable {α : Type} [DecidableEq α] [Inhabited α] [Ord α] [HfmnType α]
 
