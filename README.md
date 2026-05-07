@@ -1,21 +1,20 @@
 # LeanHuffmanCoding
+Lean Implementation for Huffmann Coding Algorithm, as a course Project for [IISc, Proof and Programs 2025](https://github.com/proofs-and-programs/proofs-and-programs-25).
 
-Lean 4 Huffman coding library with a runtime-focused API for integration into real compressors.
+This Library gives a runtime-focused API for integration for other compression pipelines.
 
-## What this library provides
+> [!Note]
+> This library is a work in progress, and more features will be added in the future.
+
+## Implemented features
 
 - Huffman tree construction from `(symbol, frequency)` tables.
+- Proof of Correctness and Optimality of the Huffman Algorithm.
 - A reusable `Codec` object with:
   - symbol-to-code lookup,
   - stream encoding (`List α -> List Bool`),
   - stream decoding (`List Bool -> List α`) with explicit errors.
 - Convenience APIs for `String` and `ByteArray` pipelines.
-
-Main modules:
-
-- `Huffman.HuffmanTree` — core tree and construction utilities.
-- `Huffman.Codec` — production-style codec build/encode/decode API.
-- `Huffman` — top-level import for consumers.
 
 ## Quick start
 
@@ -32,8 +31,10 @@ def run : Except String (List Char) := do
   decodeBits codec bits
 ```
 
-## Design notes
+## Future work
+- Better API as Library for using Huffman in more practical settings.
+- Compatibility with `pack` and `unpack` Linux utilities.
 
-- APIs return `Except String` for failure cases (invalid table, unknown symbol, malformed bitstream).
-- Single-symbol alphabets are encoded with a non-empty runtime code to keep decoding progress-safe.
-- `codeLengths` exposes `(symbol, bitLength)` values for downstream serialization/header formats.
+## Acknowledgements
+Thanks to Professor Siddhartha Gadgil, IISc for guidance throughout the project.
+This project was done with help of Codex AI.
