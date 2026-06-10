@@ -211,15 +211,13 @@ theorem optimum_huffman {α : Type} [d : DecidableEq α] (ts : Forest α)
               have h_a_alphabet_ts : a ∉ alphabetF ts'' := by
                 aesop (add norm[alphabet, alphabetF])
               have e2 : huffman us (insortTree_ne_nil _ _) = ts := by
-                aesop (add norm[splitLeaf, uniteTrees, freq, consistent, consistentF,
-                                alphabet, alphabetF])
+                aesop (add norm[splitLeaf, uniteTrees, freq, consistent, consistentF,alphabet, alphabetF])
               have h_optimum_huffman_us' : optimum (huffman us' h_us') := by
                 have hconus : consistentF us' := by
                   aesop (add norm[consistentF, consistent, alphabet, alphabetF])
                 have h_height_us' : heightF us' = 0 := by aesop(add norm[heightF,height])
                 have h_len_us' : us'.length < n := by aesop
-                grind[sortedByWeight_insortTree, heightF, height,
-                      sortedByWeight_Cons_imp_sortedByWeight]
+                grind[sortedByWeight_insortTree, heightF, height,sortedByWeight_Cons_imp_sortedByWeight]
               have h_optimum_ts : optimum ts := by
                 have h_optimum:= optimum_splitLeaf (huffman us' h_us') a b wa wb
                 have h_freq_us': ∀ c ∈ alphabetF us',

@@ -1,7 +1,12 @@
 name = "huffman"
 version = "0.1.0"
-keywords = ["math"]
-defaultTargets = ["Huffman"]
+description = "Huffman coding in Lean 4 with a formal optimality proof and Unix pack/unpack (.z) compatibility."
+keywords = ["huffman", "compression", "pack", "formal-verification"]
+# Bare `lake build` builds the runtime library, the proofs, and the tests, so a
+# broken proof or failing `#guard` fails CI. Downstream consumers that `require`
+# this package only build the modules they import (the `Huffman` lib), not these
+# default targets — so depending on the runtime API does not pull the proof stack.
+defaultTargets = ["Huffman", "HuffmanProofs", "HuffmanTest"]
 
 [leanOptions]
 pp.unicode.fun = true # pretty-prints `fun a ↦ b`
@@ -10,11 +15,18 @@ autoImplicit = false
 [[require]]
 name = "mathlib"
 scope = "leanprover-community"
+rev = "v4.29.0"
 
+# Public runtime library. Downstream consumers depend on this target only.
 [[lean_lib]]
 name = "Huffman"
 
-[[require]]
-name = "mathlib"
-scope = "leanprover-community"
-rev = "v4.29.0"
+# Optimality / correctness proofs. Built in CI but NOT pulled in by consumers of
+# `Huffman`, so depending on the runtime API does not force building the proof
+# stack. Keep `lake build HuffmanProofs` green on every change.
+[[lean_lib]]
+name = "HuffmanProofs"
+
+# Round-trip / golden test checks (compile-time `#guard`s). Built in CI.
+[[lean_lib]]
+name = "HuffmanTest"

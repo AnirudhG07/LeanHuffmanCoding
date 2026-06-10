@@ -348,6 +348,20 @@ def HfmnTree.encode (c: α) (t : HfmnTree α) : BoolList :=
     else
       true :: encode c r
 
+/--
+Total runtime encoder: returns the code for `c`, or `none` when `c ∉ t.chars`.
+
+This is the panic-free counterpart of `HfmnTree.encode` for runtime callers that
+must handle absent symbols gracefully. `HfmnTree.encode` is kept as-is because the
+optimality proofs reason about it under the hypothesis that `c` is present.
+-/
+def HfmnTree.encode? (c : α) (t : HfmnTree α) : Option BoolList :=
+  match t with
+  | .Leaf c' _ => if c = c' then some [] else none
+  | .Node l r =>
+    if l.charInTree c then (encode? c l).map (false :: ·)
+    else (encode? c r).map (true :: ·)
+
 @[simp, grind .]
 lemma HfmnTree.charInTree_leaf (a c : α) (f : Nat) :
     (HfmnTree.Leaf a f).charInTree c = (a == c) := by

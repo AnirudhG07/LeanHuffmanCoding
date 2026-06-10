@@ -1,4 +1,5 @@
 import Huffman.HfmnTree_Compression
+import Huffman.BitIO
 import Mathlib
 
 set_option linter.unusedSectionVars false
@@ -82,34 +83,39 @@ def encodeSymbols (codec : Codec α) : List α → Except String BitStream
       let tail <- encodeSymbols codec xs
       pure (head ++ tail)
 
-private def findPrefixMatch (codebook : BoolEncList α) (bits : BitStream) :
-    Option (α × BitStream) :=
-  match codebook with
-  | [] => none
-  | (a, code) :: rest =>
-      if code.isPrefixOf bits then
-        some (a, bits.drop code.length)
-      else
-        findPrefixMatch rest bits
+/-- Decode one symbol by walking the code tree (`false`→left, `true`→right). -/
+private def decodeOne (root : HfmnTree α) :
+    Nat → HfmnTree α → BitStream → Except String (α × BitStream)
+  | 0, _, _ => .error "Invalid bitstream: code longer than tree."
+  | fuel + 1, cur, bits =>
+      match cur with
+      | .Leaf a _ => .ok (a, bits)
+      | .Node l r =>
+          match bits with
+          | [] => .error "Invalid bitstream: incomplete code at end of stream."
+          | b :: rest => decodeOne root fuel (if b then r else l) rest
 
-private def decodeWithFuel
-    (codebook : BoolEncList α) :
+/-- Decode a whole bit stream via repeated tree walks — O(total bits), no
+per-symbol codebook scan. -/
+private def decodeMany (root : HfmnTree α) :
     Nat → BitStream → List α → Except String (List α)
   | 0, _, _ => .error "Invalid bitstream: decoder did not converge."
   | fuel + 1, bits, acc =>
-      if bits.isEmpty then
-        .ok acc.reverse
-      else
-        match findPrefixMatch codebook bits with
-        | none => .error "Invalid bitstream: no code matches current prefix."
-        | some (sym, rest) => decodeWithFuel codebook fuel rest (sym :: acc)
+      match bits with
+      | [] => .ok acc.reverse
+      | _ =>
+          match decodeOne root (bits.length + 1) root bits with
+          | .error e => .error e
+          | .ok (sym, rest) => decodeMany root fuel rest (sym :: acc)
 
 /--
 Decode a bit stream to symbols.
 Returns an error if the stream is malformed for this codec.
 -/
 def decodeBits (codec : Codec α) (bits : BitStream) : Except String (List α) :=
-  decodeWithFuel codec.codebook (bits.length + 1) bits []
+  match codec.tree with
+  | .Leaf a _ => .ok (bits.map (fun _ => a))  -- degenerate single-symbol tree
+  | node => decodeMany node (bits.length + 1) bits []
 
 /-- Total encoded bit length of a symbol stream under this codec. -/
 def encodedBitLength (codec : Codec α) (xs : List α) : Except String Nat := do
@@ -124,10 +130,10 @@ private def bumpCount (a : α) : FrequencyTable α → FrequencyTable α
       else
         (b, n) :: bumpCount a rest
 
-/-- Build a frequency table from raw symbols. -/
-def frequenciesOf : List α → FrequencyTable α
-  | [] => []
-  | x :: xs => bumpCount x (frequenciesOf xs)
+/-- Build a frequency table from raw symbols (first-occurrence order).
+Tail-recursive over the input length (safe for large streams). -/
+def frequenciesOf (xs : List α) : FrequencyTable α :=
+  xs.foldl (fun tbl a => bumpCount a tbl) []
 
 /-- Build codec directly from a raw symbol stream. -/
 def buildCodecFromSymbols (xs : List α) : Except String (Codec α) :=
@@ -140,7 +146,8 @@ def decodeToString (codec : Codec Char) (bits : BitStream) : Except String Strin
   let chars <- decodeBits codec bits
   pure (String.ofList chars)
 
-private def byteArrayOfList (xs : List UInt8) : ByteArray :=
+/-- Build a `ByteArray` from a list of bytes. Shared with `FileCodec`. -/
+def byteArrayOfList (xs : List UInt8) : ByteArray :=
   xs.foldl (fun out b => out.push b) ByteArray.empty
 
 def encodeBytes (codec : Codec UInt8) (bytes : ByteArray) : Except String BitStream :=
@@ -149,5 +156,57 @@ def encodeBytes (codec : Codec UInt8) (bytes : ByteArray) : Except String BitStr
 def decodeToBytes (codec : Codec UInt8) (bits : BitStream) : Except String ByteArray := do
   let out <- decodeBits codec bits
   pure (byteArrayOfList out)
+
+/-! ### ByteArray bit I/O (performance path)
+
+These avoid materializing a `List Bool` of every bit. Because raw Huffman has no
+end-of-stream marker, the encoder returns the exact bit count, which the decoder
+needs to ignore the final byte's padding. -/
+
+/-- Encode a symbol stream into MSB-first packed bytes plus the exact bit count. -/
+def encodeSymbolsBA (codec : Codec α) (xs : List α) : Except String (ByteArray × Nat) := do
+  let w ← xs.foldlM (fun (w : BitWriter) x =>
+    match lookupCode codec x with
+    | some code => pure (w.pushBits code)
+    | none => throw "Symbol is not present in codec alphabet.") ({} : BitWriter)
+  pure (w.finish, w.bitCount)
+
+/-- Decode one symbol from a `BitReader`, bounded by a remaining-bit budget. -/
+private def decodeOneR (root : HfmnTree α) :
+    Nat → HfmnTree α → BitReader → Nat → Except String (α × BitReader × Nat)
+  | 0, _, _, _ => .error "Invalid bitstream: code longer than tree."
+  | fuel + 1, cur, r, budget =>
+      match cur with
+      | .Leaf a _ => .ok (a, r, budget)
+      | .Node l rt =>
+          if budget = 0 then .error "Invalid bitstream: incomplete code at end of stream."
+          else match r.nextBit with
+            | none => .error "Invalid bitstream: unexpected end of reader."
+            | some (b, r') => decodeOneR root fuel (if b then rt else l) r' (budget - 1)
+
+private def decodeManyR (root : HfmnTree α) :
+    Nat → BitReader → Nat → List α → Except String (List α)
+  | 0, _, _, _ => .error "Invalid bitstream: decoder did not converge."
+  | fuel + 1, r, budget, acc =>
+      if budget = 0 then .ok acc.reverse
+      else match decodeOneR root (budget + 1) root r budget with
+        | .error e => .error e
+        | .ok (sym, r', budget') => decodeManyR root fuel r' budget' (sym :: acc)
+
+/-- Decode the first `bitCount` bits of packed bytes (inverse of `encodeSymbolsBA`). -/
+def decodeBA (codec : Codec α) (bytes : ByteArray) (bitCount : Nat) : Except String (List α) :=
+  match codec.tree with
+  | .Leaf a _ => .ok (List.replicate bitCount a)  -- degenerate single-symbol tree
+  | node => decodeManyR node (bitCount + 1) { bytes := bytes } bitCount []
+
+/-- Encode bytes into MSB-first packed bytes plus the exact bit count. -/
+def encodeBytesBA (codec : Codec UInt8) (bytes : ByteArray) : Except String (ByteArray × Nat) :=
+  encodeSymbolsBA codec bytes.toList
+
+/-- Decode `bitCount` bits of packed bytes back into bytes. -/
+def decodeBytesBA (codec : Codec UInt8) (bytes : ByteArray) (bitCount : Nat) :
+    Except String ByteArray := do
+  let xs ← decodeBA codec bytes bitCount
+  pure (byteArrayOfList xs)
 
 end Huffman

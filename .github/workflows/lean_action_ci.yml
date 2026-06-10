@@ -11,4 +11,16 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      # Fail fast if any proof was left incomplete. `lake build` does not error on
+      # `sorry`/`admit` (they only emit warnings), so gate on them explicitly.
+      - name: Check for sorry / admit
+        run: |
+          if grep -rnE '\b(sorry|admit)\b' Huffman/ Huffman.lean HuffmanProofs.lean; then
+            echo "::error::Found sorry/admit in the proof or library sources."
+            exit 1
+          fi
+
+      # Builds the default targets (Huffman + HuffmanProofs + HuffmanTest), so the
+      # optimality proofs compile and the `#guard` round-trip/golden tests pass.
       - uses: leanprover/lean-action@v1
