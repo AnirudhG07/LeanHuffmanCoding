@@ -37,7 +37,8 @@ def validateFrequencyTable (table : FrequencyTable α) : Except String Unit := d
     throw "Huffman frequency table has non-positive frequencies."
   pure ()
 
-private def codebookAux (t : HfmnTree α) (pref : BitStream) : BoolEncList α :=
+/-- Internal codebook builder, exposed for the round-trip correctness proof. -/
+def codebookAux (t : HfmnTree α) (pref : BitStream) : BoolEncList α :=
   match t with
   | .Leaf a _ =>
       let effectivePrefix := if pref.isEmpty then [false] else pref
@@ -83,8 +84,9 @@ def encodeSymbols (codec : Codec α) : List α → Except String BitStream
       let tail <- encodeSymbols codec xs
       pure (head ++ tail)
 
-/-- Decode one symbol by walking the code tree (`false`→left, `true`→right). -/
-private def decodeOne (root : HfmnTree α) :
+/-- Decode one symbol by walking the code tree (`false`→left, `true`→right).
+Exposed for the round-trip correctness proof. -/
+def decodeOne (root : HfmnTree α) :
     Nat → HfmnTree α → BitStream → Except String (α × BitStream)
   | 0, _, _ => .error "Invalid bitstream: code longer than tree."
   | fuel + 1, cur, bits =>
@@ -96,8 +98,8 @@ private def decodeOne (root : HfmnTree α) :
           | b :: rest => decodeOne root fuel (if b then r else l) rest
 
 /-- Decode a whole bit stream via repeated tree walks — O(total bits), no
-per-symbol codebook scan. -/
-private def decodeMany (root : HfmnTree α) :
+per-symbol codebook scan. Exposed for the round-trip correctness proof. -/
+def decodeMany (root : HfmnTree α) :
     Nat → BitStream → List α → Except String (List α)
   | 0, _, _ => .error "Invalid bitstream: decoder did not converge."
   | fuel + 1, bits, acc =>
@@ -163,12 +165,15 @@ These avoid materializing a `List Bool` of every bit. Because raw Huffman has no
 end-of-stream marker, the encoder returns the exact bit count, which the decoder
 needs to ignore the final byte's padding. -/
 
+/-- One step of the ByteArray encoder: append symbol `x`'s code to the writer. -/
+def baStep (codec : Codec α) (w : BitWriter) (x : α) : Except String BitWriter :=
+  match lookupCode codec x with
+  | some code => .ok (w.pushBits code)
+  | none => .error "Symbol is not present in codec alphabet."
+
 /-- Encode a symbol stream into MSB-first packed bytes plus the exact bit count. -/
 def encodeSymbolsBA (codec : Codec α) (xs : List α) : Except String (ByteArray × Nat) := do
-  let w ← xs.foldlM (fun (w : BitWriter) x =>
-    match lookupCode codec x with
-    | some code => pure (w.pushBits code)
-    | none => throw "Symbol is not present in codec alphabet.") ({} : BitWriter)
+  let w ← xs.foldlM (baStep codec) ({} : BitWriter)
   pure (w.finish, w.bitCount)
 
 /-- Decode one symbol from a `BitReader`, bounded by a remaining-bit budget. -/

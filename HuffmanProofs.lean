@@ -3,6 +3,8 @@ import Huffman.HfmnProofs.HfmnTree_optimality
 import Huffman.HfmnProofs.HfmnTree_uniqueness
 import Huffman.HfmnProofs.HfmnTree_prefixfreeness
 import Huffman.HfmnProofs.HfmnTree_optimality_lemma
+import Huffman.HfmnProofs.Codec_correctness
+import Huffman.HfmnProofs.Codec_roundtrip
 
 /-!
 # HuffmanProofs
