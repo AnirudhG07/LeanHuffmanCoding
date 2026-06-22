@@ -15,7 +15,7 @@ autoImplicit = false
 [[require]]
 name = "mathlib"
 scope = "leanprover-community"
-rev = "v4.29.0"
+rev = "v4.31.0"
 
 # Public runtime library. Downstream consumers depend on this target only.
 [[lean_lib]]
